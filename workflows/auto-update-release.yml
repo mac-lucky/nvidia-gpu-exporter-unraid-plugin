@@ -1,6 +1,11 @@
 name: Auto Update NVIDIA GPU Exporter Release
 
 on:
+  push:
+    paths:
+      - "nvidia_gpu_exporter.plg"
+    branches:
+      - main
   schedule:
     # Run every Monday at 9:00 AM UTC (weekly check)
     - cron: "0 9 * * 1"
