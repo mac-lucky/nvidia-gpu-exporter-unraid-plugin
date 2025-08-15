@@ -40,6 +40,7 @@ Plugin repository: https://github.com/mac-lucky/nvidia-gpu-exporter-plugin
 <INLINE>
 <![CDATA[
 # Remove old plugin files
+rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tar.gz 2>/dev/null|head -n1)
 rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.txz 2>/dev/null|head -n1)
 rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/dev/null|head -n1)
 ]]>
@@ -49,9 +50,8 @@ rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/
 <!--
 Download the binary package
 -->
-<FILE Name="/boot/config/plugins/&name;/&name;-&version;-linux-amd64.tar.gz">
+<FILE Name="/boot/config/plugins/&name;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz">
 <URL>https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz</URL>
-<MD5>18fda6e8b4f2efda39523bc75d1410f6</MD5>
 </FILE>
 
 <!--
@@ -376,7 +376,7 @@ Install binary to system location
 echo "Installing NVIDIA GPU Exporter v&version;..."
 
 cd /tmp
-tar -xzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
+tar -xzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz
 
 # The tar file contains the binary directly
 if [ -f "nvidia_gpu_exporter" ]; then
