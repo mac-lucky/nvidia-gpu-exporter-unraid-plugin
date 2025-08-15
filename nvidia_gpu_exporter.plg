@@ -211,6 +211,7 @@ Install web interface page
 <![CDATA[
 Menu="UserUtilities"
 Title="NVIDIA GPU Exporter"
+Icon="nvidia_exporter.png"
 ---
 <?php
 $plugin = "nvidia_gpu_exporter";
@@ -231,37 +232,24 @@ $pid_file = "/var/run/nvidia_gpu_exporter.pid";
 $service_pid = file_exists($pid_file) ? trim(file_get_contents($pid_file)) : "";
 ?>
 
+## About NVIDIA GPU Exporter
+
+NVIDIA GPU Exporter is a Prometheus metrics exporter for NVIDIA GPUs. This plugin makes it easy to monitor your GPU metrics on Unraid systems.
+
+**Features:**
+- 🔧 **Real-time GPU monitoring** - Temperature, utilization, memory usage, power draw
+- 📊 **Prometheus format** - Compatible with monitoring stacks like Grafana
+- 🌐 **Web interface** - Access metrics via configurable web port
+- 🔍 **Auto-discovery** - Automatically detects available nvidia-smi fields
+- ⚙️ **Configurable** - Customize port, nvidia-smi path, and query fields
+- 🔄 **Automated updates** - Plugin automatically updates to latest upstream versions
+
+**Requirements:** NVIDIA GPU with drivers installed, Unraid 6.9.0+
+
+---
+
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="/boot/config/plugins/<?=$plugin?>/<?=$plugin?>.cfg">
-
-Service Status:
-: <span class="<?=($service_running ? 'green-text' : 'red-text')?>"><?=($service_running ? 'Running' : 'Stopped')?></span>
-  <?php if($service_running && $service_pid): ?>
-  (PID: <?=$service_pid?>)
-  <?php endif; ?>
-
-Enable Service:
-: <select name="SERVICE" size="1">
-  <?=mk_option($cfg['SERVICE'], "disable", "No");?>
-  <?=mk_option($cfg['SERVICE'], "enable", "Yes");?>
-  </select>
-
-Port:
-: <input type="number" name="PORT" min="1024" max="65535" value="<?=htmlspecialchars($cfg['PORT'])?>" class="narrow">
-  <blockquote class="inline_help">
-  <p>Port for the metrics endpoint (default: 9835)</p>
-  </blockquote>
-
-&nbsp;
-: <input type="submit" value="Apply"><input type="button" value="Done" onclick="done()">
-</form>
-
-<script>
-function done(){
-  parent.parent.Shadowbox.close();
-}
-</script>
-]]>
 
 Service Status:
 : <span class="<?=($service_running ? 'green-text' : 'red-text')?>"><?=($service_running ? 'Running' : 'Stopped')?></span>
