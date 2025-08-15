@@ -15,7 +15,8 @@
         launch="&launch;"
         pluginURL="&pluginURL;"
         min="6.9.0"
-        support="&gitURL;/issues">
+        support="&gitURL;/issues"
+        description="NVIDIA GPU Exporter - Prometheus metrics exporter for NVIDIA GPUs with web interface and automated updates">
 
 <CHANGES>
 ###1.3.2###
@@ -235,6 +236,22 @@ $service_running = trim(shell_exec("ps aux | grep '[n]vidia_gpu_exporter' | wc -
 $pid_file = "/var/run/nvidia_gpu_exporter.pid";
 $service_pid = file_exists($pid_file) ? trim(file_get_contents($pid_file)) : "";
 ?>
+
+## About NVIDIA GPU Exporter
+
+NVIDIA GPU Exporter is a Prometheus metrics exporter for NVIDIA GPUs. This plugin makes it easy to monitor your GPU metrics on Unraid systems.
+
+**Features:**
+- 🔧 **Real-time GPU monitoring** - Temperature, utilization, memory usage, power draw
+- 📊 **Prometheus format** - Compatible with monitoring stacks like Grafana
+- 🌐 **Web interface** - Access metrics via configurable web port
+- 🔍 **Auto-discovery** - Automatically detects available nvidia-smi fields
+- ⚙️ **Configurable** - Customize port, nvidia-smi path, and query fields
+- 🔄 **Automated updates** - Plugin automatically updates to latest upstream versions
+
+**Requirements:** NVIDIA GPU with drivers installed, Unraid 6.9.0+
+
+---
 
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="/boot/config/plugins/<?=$plugin?>/<?=$plugin?>.cfg">
