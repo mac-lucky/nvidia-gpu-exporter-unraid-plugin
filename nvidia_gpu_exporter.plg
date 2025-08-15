@@ -4,7 +4,7 @@
 <!ENTITY name      "nvidia_gpu_exporter">
 <!ENTITY author    "mac-lucky">
 <!ENTITY version   "1.3.2">
-<!ENTITY launch    "Settings/nvidia_gpu_exporter">
+<!ENTITY launch    "UserUtilities/nvidia_gpu_exporter">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
 ]>
