@@ -4,9 +4,9 @@
 <!ENTITY name      "nvidia_gpu_exporter">
 <!ENTITY author    "mac-lucky">
 <!ENTITY version   "1.3.2">
-<!ENTITY launch    "Settings/nvidia_gpu_exporter">
-<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
+<!ENTITY launch    "UserUtilities/nvidia_gpu_exporter">
+<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia_gpu_exporter">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/&name;.plg">
 ]>
 
 <PLUGIN name="&name;"
@@ -18,8 +18,8 @@
         support="&gitURL;/issues">
 
 <CHANGES>
-###1.3.2###
-- Updated to NVIDIA GPU Exporter v1.3.2
+###&version;###
+- Unraid plugin release
 - Auto-discovery of nvidia-smi metric fields
 - Configurable web interface on port 9835
 - Systemd service management
@@ -27,19 +27,20 @@
 </CHANGES>
 
 <!--
-Copyright 2025, mac-lucky
+Copyright 2025, utkuozdemir
 NVIDIA GPU Exporter plugin for Unraid.
 
 Plugin file for NVIDIA GPU Exporter
-Original software: https://github.com/utkuozdemir/nvidia_gpu_exporter
-Plugin repository: https://github.com/mac-lucky/nvidia-gpu-exporter-plugin
+Source: https://github.com/utkuozdemir/nvidia_gpu_exporter
 -->
 
 <FILE Run="/bin/bash">
 <INLINE>
+<![CDATA[
 # Remove old plugin files
 rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.txz 2>/dev/null|head -n1)
 rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/dev/null|head -n1)
+]]>
 </INLINE>
 </FILE>
 
@@ -47,7 +48,7 @@ rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/
 Download the binary package
 -->
 <FILE Name="/boot/config/plugins/&name;/&name;-&version;-linux-amd64.tar.gz">
-<URL>https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz</URL>
+<URL>https://github.com/&author;/&name;/releases/download/v&version;/&name;_&version;_linux_x86_64.tar.gz</URL>
 <MD5>18fda6e8b4f2efda39523bc75d1410f6</MD5>
 </FILE>
 
@@ -69,6 +70,7 @@ Service file for controlling the daemon
 -->
 <FILE Name="/etc/rc.d/rc.&name;" Mode="0755">
 <INLINE>
+<![CDATA[
 #!/bin/bash
 # Start/stop/restart nvidia_gpu_exporter
 
@@ -79,7 +81,7 @@ case "$1" in
     if [ "$SERVICE" == "enable" ]; then
       echo "Starting NVIDIA GPU Exporter..."
       # Check if nvidia-smi is available
-      if ! command -v nvidia-smi &amp;&gt; /dev/null &amp;&amp; [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
+      if ! command -v nvidia-smi &> /dev/null && [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
         echo "nvidia-smi not found. Please install NVIDIA drivers first."
         exit 1
       fi
@@ -89,19 +91,19 @@ case "$1" in
         --web.listen-address=":$PORT" \
         --nvidia-smi-command="$NVIDIASMI" \
         --query-field-names="$QUERYFIELDS" \
-        &gt;&gt; "$LOGFILE" 2&gt;&amp;1 &amp;
+        >> "$LOGFILE" 2>&1 &
       
-      echo $! &gt; /var/run/nvidia_gpu_exporter.pid
+      echo $! > /var/run/nvidia_gpu_exporter.pid
       echo "NVIDIA GPU Exporter started on port $PORT"
     fi
     ;;
   'stop')
     echo "Stopping NVIDIA GPU Exporter..."
     if [ -f /var/run/nvidia_gpu_exporter.pid ]; then
-      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2&gt;/dev/null
+      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2>/dev/null
       rm -f /var/run/nvidia_gpu_exporter.pid
     fi
-    killall nvidia_gpu_exporter 2&gt;/dev/null
+    killall nvidia_gpu_exporter 2>/dev/null
     echo "NVIDIA GPU Exporter stopped"
     ;;
   'restart')
@@ -113,6 +115,7 @@ case "$1" in
     echo "Usage: $0 {start|stop|restart}"
     exit 1
 esac
+]]>
 </INLINE>
 </FILE>
 
@@ -200,7 +203,7 @@ if ($_POST['action']) {
 Install plugin icon
 -->
 <FILE Name="/usr/local/emhttp/plugins/&name;/images/nvidia_exporter.png" Mode="0644">
-<URL>https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_exporter.png</URL>
+<URL>https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/nvidia_exporter.png</URL>
 </FILE>
 
 <!--
@@ -209,7 +212,7 @@ Install web interface page
 <FILE Name="/usr/local/emhttp/plugins/&name;/&name;.page">
 <INLINE>
 <![CDATA[
-Menu="Settings"
+Menu="UserUtilities"
 Title="NVIDIA GPU Exporter"
 Icon="nvidia_exporter.png"
 ---
@@ -231,22 +234,6 @@ $service_running = trim(shell_exec("ps aux | grep '[n]vidia_gpu_exporter' | wc -
 $pid_file = "/var/run/nvidia_gpu_exporter.pid";
 $service_pid = file_exists($pid_file) ? trim(file_get_contents($pid_file)) : "";
 ?>
-
-## About NVIDIA GPU Exporter
-
-NVIDIA GPU Exporter is a Prometheus metrics exporter for NVIDIA GPUs. This plugin makes it easy to monitor your GPU metrics on Unraid systems.
-
-**Features:**
-- 🔧 **Real-time GPU monitoring** - Temperature, utilization, memory usage, power draw
-- 📊 **Prometheus format** - Compatible with monitoring stacks like Grafana
-- 🌐 **Web interface** - Access metrics via configurable web port
-- 🔍 **Auto-discovery** - Automatically detects available nvidia-smi fields
-- ⚙️ **Configurable** - Customize port, nvidia-smi path, and query fields
-- 🔄 **Automated updates** - Plugin automatically updates to latest upstream versions
-
-**Requirements:** NVIDIA GPU with drivers installed, Unraid 6.9.0+
-
----
 
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="/boot/config/plugins/<?=$plugin?>/<?=$plugin?>.cfg">
@@ -366,58 +353,12 @@ Install binary to system location
 -->
 <FILE Run="/bin/bash">
 <INLINE>
+<![CDATA[
 # Extract and install the binary
-echo "Installing NVIDIA GPU Exporter v&version;..."
-echo "Checking for downloaded archive..."
-
-ARCHIVE_PATH="/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz"
-if [ ! -f "$ARCHIVE_PATH" ]; then
-    echo "ERROR: Archive not found at $ARCHIVE_PATH"
-    echo "Available files in plugin directory:"
-    ls -la /boot/config/plugins/nvidia_gpu_exporter/
-    exit 1
-fi
-
-echo "Archive found, extracting..."
 cd /tmp
-tar -xzf "$ARCHIVE_PATH"
-
-echo "Archive contents after extraction:"
-ls -la
-
-# The tar file contains the binary directly
-if [ -f "nvidia_gpu_exporter" ]; then
-    echo "Found binary in root directory"
-    cp nvidia_gpu_exporter /usr/local/bin/
-elif [ -f "nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter" ]; then
-    echo "Found binary in subdirectory"
-    cp nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter /usr/local/bin/
-else
-    echo "Binary not found in expected locations, searching..."
-    # Find the binary file
-    BINARY_FILE=$(find . -name "nvidia_gpu_exporter" -type f | head -1)
-    if [ -n "$BINARY_FILE" ]; then
-        echo "Found binary at: $BINARY_FILE"
-        cp "$BINARY_FILE" /usr/local/bin/
-    else
-        echo "Error: nvidia_gpu_exporter binary not found in archive"
-        echo "Contents of archive:"
-        tar -tzf "$ARCHIVE_PATH"
-        echo "Current directory contents:"
-        ls -la
-        exit 1
-    fi
-fi
-
+tar -xzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
+cp nvidia_gpu_exporter /usr/local/bin/
 chmod +x /usr/local/bin/nvidia_gpu_exporter
-
-# Verify installation
-if [ ! -f "/usr/local/bin/nvidia_gpu_exporter" ]; then
-    echo "Error: Failed to install nvidia_gpu_exporter binary"
-    exit 1
-fi
-
-echo "Binary installed successfully at /usr/local/bin/nvidia_gpu_exporter"
 
 # Create log directory
 mkdir -p /var/log
@@ -425,12 +366,12 @@ mkdir -p /var/log
 # Create web interface directory
 mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter
 
-# Clean up temp files
-rm -rf /tmp/nvidia_gpu_exporter*
+# Clean up
+rm -f /tmp/nvidia_gpu_exporter
 
 # Start the service if enabled
-echo "Starting service..."
 /etc/rc.d/rc.nvidia_gpu_exporter start
+]]>
 </INLINE>
 </FILE>
 
@@ -439,6 +380,7 @@ The 'remove' script
 -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
+<![CDATA[
 # Stop and disable service
 /etc/rc.d/rc.nvidia_gpu_exporter stop
 
@@ -451,6 +393,7 @@ rm -rf /boot/config/plugins/nvidia_gpu_exporter
 rm -rf /usr/local/emhttp/plugins/nvidia_gpu_exporter
 
 echo "NVIDIA GPU Exporter plugin removed successfully"
+]]>
 </INLINE>
 </FILE>
 
