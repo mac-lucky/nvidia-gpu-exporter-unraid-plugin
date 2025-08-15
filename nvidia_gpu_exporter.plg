@@ -38,11 +38,9 @@ Plugin repository: https://github.com/mac-lucky/nvidia-gpu-exporter-plugin
 
 <FILE Run="/bin/bash">
 <INLINE>
-<![CDATA[
 # Remove old plugin files
 rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.txz 2>/dev/null|head -n1)
 rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/dev/null|head -n1)
-]]>
 </INLINE>
 </FILE>
 
@@ -72,7 +70,6 @@ Service file for controlling the daemon
 -->
 <FILE Name="/etc/rc.d/rc.&name;" Mode="0755">
 <INLINE>
-<![CDATA[
 #!/bin/bash
 # Start/stop/restart nvidia_gpu_exporter
 
@@ -83,7 +80,7 @@ case "$1" in
     if [ "$SERVICE" == "enable" ]; then
       echo "Starting NVIDIA GPU Exporter..."
       # Check if nvidia-smi is available
-      if ! command -v nvidia-smi &> /dev/null && [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
+      if ! command -v nvidia-smi &amp;&gt; /dev/null &amp;&amp; [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
         echo "nvidia-smi not found. Please install NVIDIA drivers first."
         exit 1
       fi
@@ -93,19 +90,19 @@ case "$1" in
         --web.listen-address=":$PORT" \
         --nvidia-smi-command="$NVIDIASMI" \
         --query-field-names="$QUERYFIELDS" \
-        >> "$LOGFILE" 2>&1 &
+        &gt;&gt; "$LOGFILE" 2&gt;&amp;1 &amp;
       
-      echo $! > /var/run/nvidia_gpu_exporter.pid
+      echo $! &gt; /var/run/nvidia_gpu_exporter.pid
       echo "NVIDIA GPU Exporter started on port $PORT"
     fi
     ;;
   'stop')
     echo "Stopping NVIDIA GPU Exporter..."
     if [ -f /var/run/nvidia_gpu_exporter.pid ]; then
-      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2>/dev/null
+      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2&gt;/dev/null
       rm -f /var/run/nvidia_gpu_exporter.pid
     fi
-    killall nvidia_gpu_exporter 2>/dev/null
+    killall nvidia_gpu_exporter 2&gt;/dev/null
     echo "NVIDIA GPU Exporter stopped"
     ;;
   'restart')
@@ -117,7 +114,6 @@ case "$1" in
     echo "Usage: $0 {start|stop|restart}"
     exit 1
 esac
-]]>
 </INLINE>
 </FILE>
 
@@ -371,7 +367,6 @@ Install binary to system location
 -->
 <FILE Run="/bin/bash">
 <INLINE>
-<![CDATA[
 # Extract and install the binary
 echo "Installing NVIDIA GPU Exporter v&version;..."
 
@@ -391,6 +386,8 @@ else
         cp "$BINARY_FILE" /usr/local/bin/
     else
         echo "Error: nvidia_gpu_exporter binary not found in archive"
+        echo "Contents of archive:"
+        tar -tzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
         exit 1
     fi
 fi
@@ -417,7 +414,6 @@ rm -rf /tmp/nvidia_gpu_exporter*
 # Start the service if enabled
 echo "Starting service..."
 /etc/rc.d/rc.nvidia_gpu_exporter start
-]]>
 </INLINE>
 </FILE>
 
@@ -426,7 +422,6 @@ The 'remove' script
 -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
-<![CDATA[
 # Stop and disable service
 /etc/rc.d/rc.nvidia_gpu_exporter stop
 
@@ -439,7 +434,6 @@ rm -rf /boot/config/plugins/nvidia_gpu_exporter
 rm -rf /usr/local/emhttp/plugins/nvidia_gpu_exporter
 
 echo "NVIDIA GPU Exporter plugin removed successfully"
-]]>
 </INLINE>
 </FILE>
 
