@@ -15,8 +15,7 @@
         launch="&launch;"
         pluginURL="&pluginURL;"
         min="6.9.0"
-        support="&gitURL;/issues"
-        description="NVIDIA GPU Exporter - Prometheus metrics exporter for NVIDIA GPUs with web interface and automated updates">
+        support="&gitURL;/issues">
 
 <CHANGES>
 ###1.3.2###
@@ -369,25 +368,43 @@ Install binary to system location
 <INLINE>
 # Extract and install the binary
 echo "Installing NVIDIA GPU Exporter v&version;..."
+echo "Checking for downloaded archive..."
 
+ARCHIVE_PATH="/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz"
+if [ ! -f "$ARCHIVE_PATH" ]; then
+    echo "ERROR: Archive not found at $ARCHIVE_PATH"
+    echo "Available files in plugin directory:"
+    ls -la /boot/config/plugins/nvidia_gpu_exporter/
+    exit 1
+fi
+
+echo "Archive found, extracting..."
 cd /tmp
-tar -xzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
+tar -xzf "$ARCHIVE_PATH"
+
+echo "Archive contents after extraction:"
+ls -la
 
 # The tar file contains the binary directly
 if [ -f "nvidia_gpu_exporter" ]; then
+    echo "Found binary in root directory"
     cp nvidia_gpu_exporter /usr/local/bin/
 elif [ -f "nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter" ]; then
-    # In case it's in a subdirectory
+    echo "Found binary in subdirectory"
     cp nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter /usr/local/bin/
 else
+    echo "Binary not found in expected locations, searching..."
     # Find the binary file
     BINARY_FILE=$(find . -name "nvidia_gpu_exporter" -type f | head -1)
     if [ -n "$BINARY_FILE" ]; then
+        echo "Found binary at: $BINARY_FILE"
         cp "$BINARY_FILE" /usr/local/bin/
     else
         echo "Error: nvidia_gpu_exporter binary not found in archive"
         echo "Contents of archive:"
-        tar -tzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
+        tar -tzf "$ARCHIVE_PATH"
+        echo "Current directory contents:"
+        ls -la
         exit 1
     fi
 fi
