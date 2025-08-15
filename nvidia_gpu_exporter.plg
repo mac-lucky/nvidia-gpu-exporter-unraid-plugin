@@ -2,11 +2,11 @@
 
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia_gpu_exporter">
-<!ENTITY author    "utkuozdemir">
+<!ENTITY author    "mac-lucky">
 <!ENTITY version   "1.3.2">
 <!ENTITY launch    "UserUtilities/nvidia_gpu_exporter">
-<!ENTITY gitURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/&name;.plg">
+<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
 ]>
 
 <PLUGIN name="&name;"
@@ -27,11 +27,12 @@
 </CHANGES>
 
 <!--
-Copyright 2025, utkuozdemir
+Copyright 2025, mac-lucky
 NVIDIA GPU Exporter plugin for Unraid.
 
 Plugin file for NVIDIA GPU Exporter
-Source: https://github.com/utkuozdemir/nvidia_gpu_exporter
+Original software: https://github.com/utkuozdemir/nvidia_gpu_exporter
+Plugin repository: https://github.com/mac-lucky/nvidia-gpu-exporter-plugin
 -->
 
 <FILE Run="/bin/bash">
@@ -48,7 +49,7 @@ rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/
 Download the binary package
 -->
 <FILE Name="/boot/config/plugins/&name;/&name;-&version;-linux-amd64.tar.gz">
-<URL>https://github.com/&author;/&name;/releases/download/v&version;/&name;_&version;_linux_x86_64.tar.gz</URL>
+<URL>https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz</URL>
 <MD5>18fda6e8b4f2efda39523bc75d1410f6</MD5>
 </FILE>
 
@@ -355,10 +356,37 @@ Install binary to system location
 <INLINE>
 <![CDATA[
 # Extract and install the binary
+echo "Installing NVIDIA GPU Exporter v&version;..."
+
 cd /tmp
 tar -xzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
-cp nvidia_gpu_exporter /usr/local/bin/
+
+# The tar file contains the binary directly
+if [ -f "nvidia_gpu_exporter" ]; then
+    cp nvidia_gpu_exporter /usr/local/bin/
+elif [ -f "nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter" ]; then
+    # In case it's in a subdirectory
+    cp nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter /usr/local/bin/
+else
+    # Find the binary file
+    BINARY_FILE=$(find . -name "nvidia_gpu_exporter" -type f | head -1)
+    if [ -n "$BINARY_FILE" ]; then
+        cp "$BINARY_FILE" /usr/local/bin/
+    else
+        echo "Error: nvidia_gpu_exporter binary not found in archive"
+        exit 1
+    fi
+fi
+
 chmod +x /usr/local/bin/nvidia_gpu_exporter
+
+# Verify installation
+if [ ! -f "/usr/local/bin/nvidia_gpu_exporter" ]; then
+    echo "Error: Failed to install nvidia_gpu_exporter binary"
+    exit 1
+fi
+
+echo "Binary installed successfully at /usr/local/bin/nvidia_gpu_exporter"
 
 # Create log directory
 mkdir -p /var/log
@@ -366,10 +394,11 @@ mkdir -p /var/log
 # Create web interface directory
 mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter
 
-# Clean up
-rm -f /tmp/nvidia_gpu_exporter
+# Clean up temp files
+rm -rf /tmp/nvidia_gpu_exporter*
 
 # Start the service if enabled
+echo "Starting service..."
 /etc/rc.d/rc.nvidia_gpu_exporter start
 ]]>
 </INLINE>
