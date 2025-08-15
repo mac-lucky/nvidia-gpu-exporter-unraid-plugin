@@ -1,91 +1,10 @@
 # NVIDIA GPU Exporter Unraid Plugin
 
-This plugin provides easy installation and management of the NVIDIA GPU Exporter on Unraid systems, allowing you to monitor GPU metrics in Prometheus format.
-
-## 📋 Features
-
-- 🔧 **Real-time GPU monitoring** - Temperature, utilization, memory usage, power draw
-- 📊 **Prometheus format** - Compatible with monitoring stacks like Grafana
-- 🌐 **Web interface** - Access metrics via configurable web port (default: 9835)
-- 🔍 **Auto-discovery** - Automatically detects available nvidia-smi fields
-- ⚙️ **Configurable** - Customize port, nvidia-smi path, and query fields
-- 🔄 **Automated updates** - Plugin automatically updates to latest upstream versions
-
-## 📋 Requirements
-
-- **Unraid 6.9.0 or later**
-- **NVIDIA GPU** installed in the system
-- **NVIDIA GPU drivers** properly installed
-- **NVIDIA Container Toolkit** (recommended for Docker GPU access)
-
-## 🚀 Installation
-
-### Method 1: Community Applications (Recommended)
-
-1. Open **Apps** tab in Unraid
-2. Search for "**NVIDIA GPU Exporter**"
-3. Click **Install**
-4. Configure in **User Utilities** → **NVIDIA GPU Exporter**
-
-### Method 2: Manual Installation
-
-1. Go to **Plugins** tab in Unraid
-2. Enter this URL in "**Install Plugin**" field:
-   ```
-   https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg
-   ```
-3. Click **Install**
-4. Configure in **User Utilities** → **NVIDIA GPU Exporter**
-
-## ⚙️ Configuration
-
-After installation, configure the plugin:
-
-1. Go to **User Utilities** → **NVIDIA GPU Exporter**
-2. **Enable Service**: Set to "Yes" to start the exporter
-3. **Port**: Set the web port (default: 9835)
-4. **NVIDIA SMI Path**: Path to nvidia-smi binary (default: /usr/bin/nvidia-smi)
-5. **Query Fields**: Choose field detection method:
-   - **Auto-detect**: Automatically discover available fields
-   - **Basic**: Common fields (temperature, utilization, memory)
-   - **Extended**: Additional fields (clocks, power, fan speed)
-6. Click **Apply** to save settings
-
-## 📊 Usage
-
-### Accessing Metrics
-
-Once enabled, access metrics at:
-
-```
-http://your-unraid-ip:9835/metrics
-```
-
-### Integration with Monitoring
-
-#### Prometheus Configuration
-
-Add to your `prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: "nvidia-gpu"
-    static_configs:
-      - targets: ["your-unraid-ip:9835"]
-```
-
-#### Grafana Dashboard
-
-Import existing NVIDIA GPU dashboards or create custom visualizations using metrics like:
-
-- `nvidia_gpu_temperature_celsius`
-- `nvidia_gpu_utilization_percent`
-- `nvidia_gpu_memory_used_bytes`
-- `nvidia_gpu_power_draw_watts`
+This plugin provides easy installation and management of the NVIDIA GPU Exporter on Unraid systems with automated dependency management.
 
 ## 🔄 Automated Updates
 
-This plugin includes automated dependency management via GitHub Actions:
+This plugin repository includes automated dependency management via GitHub Actions:
 
 ### Weekly Automated Checks
 
@@ -95,7 +14,7 @@ This plugin includes automated dependency management via GitHub Actions:
 
 ### What Gets Updated Automatically
 
-1. **Plugin Version**: Updated in plugin declaration
+1. **Plugin Version**: Updated in `<!ENTITY version>` declaration
 2. **MD5 Checksum**: Calculated and updated for the new binary
 3. **CHANGES Section**: Updated with new version information
 4. **Validation**: XML syntax checking and build testing
@@ -108,63 +27,27 @@ You can manually trigger the update workflow:
 2. Click **Run workflow**
 3. Optionally enable "Force update even if already latest"
 
-## �️ Troubleshooting
+## 📋 Workflow Features
 
-### Plugin Not Appearing in User Utilities
-
-1. Check that the plugin installed successfully in **Plugins** tab
-2. Refresh the page or clear browser cache
-3. Verify Unraid version is 6.9.0 or later
-
-### Service Won't Start
-
-1. Verify NVIDIA drivers are installed: `nvidia-smi`
-2. Check nvidia-smi path in plugin configuration
-3. Review logs in plugin interface or `/var/log/nvidia_gpu_exporter.log`
-
-### No Metrics Data
-
-1. Ensure service is running (green status in plugin interface)
-2. Test nvidia-smi command manually
-3. Check firewall settings for configured port
-4. Verify GPU is accessible and drivers are loaded
-
-## 🔧 Development
-
-### Workflow Features
-
-#### Comprehensive Validation
+### Comprehensive Validation
 
 - ✅ Downloads and verifies new release binaries
 - ✅ Calculates MD5 checksums automatically
 - ✅ Validates XML plugin syntax
+- ✅ Tests build process (if Makefile exists)
 - ✅ Creates detailed Pull Request with release information
 
-#### Error Handling
+### Error Handling
 
 - 🚨 Creates GitHub issues if automation fails
 - 📊 Provides detailed workflow summaries
 - 🔄 Includes rollback protection via PR review process
 
-#### Security
+### Security
 
 - 🔒 Uses GitHub's built-in `GITHUB_TOKEN`
 - 🎯 Only updates specific version/checksum fields
 - 👀 All changes are reviewed via Pull Request
-
-## 📝 License
-
-This plugin is based on the excellent work by [utkuozdemir](https://github.com/utkuozdemir/nvidia_gpu_exporter).
-
-## 🆘 Support
-
-- **Plugin Issues**: [GitHub Issues](https://github.com/mac-lucky/nvidia-gpu-exporter-plugin/issues)
-- **Upstream Project**: [NVIDIA GPU Exporter](https://github.com/utkuozdemir/nvidia_gpu_exporter)
-- **Unraid Forums**: [Plugin Support](https://forums.unraid.net/forum/61-plugin-support/)
-
-## 📈 Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or report issues.
 
 ## Features
 

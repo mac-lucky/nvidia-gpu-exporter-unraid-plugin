@@ -368,23 +368,43 @@ Install binary to system location
 <INLINE>
 # Extract and install the binary
 echo "Installing NVIDIA GPU Exporter v&version;..."
+echo "Checking for downloaded archive..."
 
 ARCHIVE_PATH="/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz"
+if [ ! -f "$ARCHIVE_PATH" ]; then
+    echo "ERROR: Archive not found at $ARCHIVE_PATH"
+    echo "Available files in plugin directory:"
+    ls -la /boot/config/plugins/nvidia_gpu_exporter/
+    exit 1
+fi
+
+echo "Archive found, extracting..."
 cd /tmp
 tar -xzf "$ARCHIVE_PATH"
 
+echo "Archive contents after extraction:"
+ls -la
+
 # The tar file contains the binary directly
 if [ -f "nvidia_gpu_exporter" ]; then
+    echo "Found binary in root directory"
     cp nvidia_gpu_exporter /usr/local/bin/
 elif [ -f "nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter" ]; then
+    echo "Found binary in subdirectory"
     cp nvidia_gpu_exporter_&version;_linux_x86_64/nvidia_gpu_exporter /usr/local/bin/
 else
+    echo "Binary not found in expected locations, searching..."
     # Find the binary file
     BINARY_FILE=$(find . -name "nvidia_gpu_exporter" -type f | head -1)
     if [ -n "$BINARY_FILE" ]; then
+        echo "Found binary at: $BINARY_FILE"
         cp "$BINARY_FILE" /usr/local/bin/
     else
         echo "Error: nvidia_gpu_exporter binary not found in archive"
+        echo "Contents of archive:"
+        tar -tzf "$ARCHIVE_PATH"
+        echo "Current directory contents:"
+        ls -la
         exit 1
     fi
 fi
@@ -397,25 +417,20 @@ if [ ! -f "/usr/local/bin/nvidia_gpu_exporter" ]; then
     exit 1
 fi
 
-echo "Binary installed successfully"
+echo "Binary installed successfully at /usr/local/bin/nvidia_gpu_exporter"
 
-# Create directories
+# Create log directory
 mkdir -p /var/log
+
+# Create web interface directory
 mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter
-mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter/images
-mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts
 
-# Set proper permissions
-chmod 755 /usr/local/emhttp/plugins/nvidia_gpu_exporter
-chmod 644 /usr/local/emhttp/plugins/nvidia_gpu_exporter/*.page 2>/dev/null || true
-chmod 644 /usr/local/emhttp/plugins/nvidia_gpu_exporter/images/*.png 2>/dev/null || true
-chmod 644 /usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/*.php 2>/dev/null || true
-
-# Clean up
+# Clean up temp files
 rm -rf /tmp/nvidia_gpu_exporter*
 
-echo "NVIDIA GPU Exporter plugin installed successfully"
-echo "Please refresh your browser and navigate to User Utilities > NVIDIA GPU Exporter"
+# Start the service if enabled
+echo "Starting service..."
+/etc/rc.d/rc.nvidia_gpu_exporter start
 </INLINE>
 </FILE>
 

@@ -17,6 +17,3 @@ build/
 
 # Logs
 *.log
-
-# Plugin backup files
-*.plg.backup
