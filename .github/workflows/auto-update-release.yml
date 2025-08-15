@@ -182,10 +182,6 @@ jobs:
           branch-suffix: short-commit-hash
           delete-branch: true
           draft: false
-          labels: |
-            enhancement
-            automation
-            dependencies
 
       - name: Auto-merge Pull Request
         if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
