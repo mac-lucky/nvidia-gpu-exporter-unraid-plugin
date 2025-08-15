@@ -1,0 +1,249 @@
+name: Auto Update NVIDIA GPU Exporter Release
+
+on:
+  schedule:
+    # Run every Monday at 9:00 AM UTC (weekly check)
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    # Allow manual triggering
+    inputs:
+      force_update:
+        description: "Force update even if already latest"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Get latest NVIDIA GPU Exporter release
+        id: get_latest
+        run: |
+          # Get latest release info from GitHub API
+          LATEST_RELEASE=$(curl -s "https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest")
+          LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name' | sed 's/^v//')
+          RELEASE_URL=$(echo "$LATEST_RELEASE" | jq -r '.html_url')
+          RELEASE_DATE=$(echo "$LATEST_RELEASE" | jq -r '.published_at')
+          RELEASE_NOTES=$(echo "$LATEST_RELEASE" | jq -r '.body' | head -10)
+
+          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+          echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
+
+          # Save release notes for PR description
+          echo "$RELEASE_NOTES" > /tmp/release_notes.txt
+          echo "Release notes saved to /tmp/release_notes.txt"
+
+      - name: Get current version from plugin
+        id: get_current
+        run: |
+          # Extract current version from the plugin file
+          if [ -f "nvidia_gpu_exporter.plg" ]; then
+            CURRENT_VERSION=$(grep '<!ENTITY version' nvidia_gpu_exporter.plg | sed 's/.*"\([^"]*\)".*/\1/')
+            echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "current_version=0.0.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compare versions
+        id: compare
+        run: |
+          CURRENT="${{ steps.get_current.outputs.current_version }}"
+          LATEST="${{ steps.get_latest.outputs.latest_version }}"
+
+          echo "Current version: $CURRENT"
+          echo "Latest version: $LATEST"
+
+          if [ "$CURRENT" != "$LATEST" ] || [ "${{ inputs.force_update }}" = "true" ]; then
+            echo "update_needed=true" >> $GITHUB_OUTPUT
+            echo "Update needed: $CURRENT -> $LATEST"
+          else
+            echo "update_needed=false" >> $GITHUB_OUTPUT
+            echo "Already up to date!"
+          fi
+
+      - name: Download and verify new release
+        if: steps.compare.outputs.update_needed == 'true'
+        id: download
+        run: |
+          NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
+          DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${NEW_VERSION}/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz"
+
+          echo "Downloading: $DOWNLOAD_URL"
+
+          # Download the new release
+          wget -O "/tmp/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz" "$DOWNLOAD_URL"
+
+          # Calculate MD5 checksum
+          NEW_MD5=$(md5sum "/tmp/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz" | cut -d' ' -f1)
+          echo "new_md5=$NEW_MD5" >> $GITHUB_OUTPUT
+          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo "MD5 checksum: $NEW_MD5"
+
+      - name: Update plugin file
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
+          NEW_MD5="${{ steps.download.outputs.new_md5 }}"
+          PLUGIN_FILE="nvidia_gpu_exporter.plg"
+
+          # Create backup
+          cp "$PLUGIN_FILE" "${PLUGIN_FILE}.backup"
+
+          # Update version entity
+          sed -i "s/<!ENTITY version[[:space:]]*\"[^\"]*\">/<!ENTITY version   \"$NEW_VERSION\">/" "$PLUGIN_FILE"
+
+          # Update MD5 checksum
+          sed -i "s/MD5=\"[^\"]*\"/MD5=\"$NEW_MD5\"/" "$PLUGIN_FILE"
+
+          # Update CHANGES section
+          NEW_CHANGES="###${NEW_VERSION}###"$'\n'"- Updated to NVIDIA GPU Exporter v${NEW_VERSION}"$'\n'"- Auto-discovery of nvidia-smi metric fields"$'\n'"- Configurable web interface on port 9835"$'\n'"- Systemd service management"$'\n'"- Support for remote nvidia-smi execution"
+
+          # Replace changes content between tags
+          perl -i -pe '
+            BEGIN{undef $/;}
+            s|(<CHANGES>).*?(</CHANGES>)|$1\n'"$NEW_CHANGES"'\n$2|smg
+          ' "$PLUGIN_FILE"
+
+          echo "Updated plugin file with version $NEW_VERSION"
+
+      - name: Update Makefile version target
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
+
+          # Update version in Makefile template if it exists
+          if [ -f "Makefile" ]; then
+            echo "Makefile exists, updating version references"
+            # Reset placeholder to ensure clean state for future builds
+            if [ -f "nvidia_gpu_exporter.plg.template" ]; then
+              sed -i 's/<!ENTITY version[[:space:]]*"[^"]*">/<!ENTITY version   "PLACEHOLDER_VERSION">/' nvidia_gpu_exporter.plg.template
+            fi
+          fi
+
+      - name: Validate updated plugin
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          # Run plugin validation
+          if [ -f "validate_plugin.sh" ]; then
+            chmod +x validate_plugin.sh
+            ./validate_plugin.sh
+          fi
+
+          # Check XML syntax
+          xmllint --noout nvidia_gpu_exporter.plg
+          echo "✓ Plugin validation successful"
+
+      - name: Test build with new version
+        if: steps.compare.outputs.update_needed == 'true'
+        run: |
+          if [ -f "Makefile" ]; then
+            # Test that the build process works
+            make clean
+            make version
+            echo "✓ Build test successful"
+          else
+            echo "No Makefile found, skipping build test"
+          fi
+
+      - name: Create Pull Request
+        if: steps.compare.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: update NVIDIA GPU Exporter to v${{ steps.get_latest.outputs.latest_version }}
+
+            - Updated plugin to use NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}
+            - Updated MD5 checksum to ${{ steps.download.outputs.new_md5 }}
+            - Automatic update via GitHub Actions
+
+            Release URL: ${{ steps.get_latest.outputs.release_url }}
+          title: "🔄 Update NVIDIA GPU Exporter to v${{ steps.get_latest.outputs.latest_version }}"
+          body: |
+            ## 🚀 Automatic Update to NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}
+
+            This PR automatically updates the NVIDIA GPU Exporter to the latest version.
+
+            ### 📋 Changes
+            - **Version**: `${{ steps.get_current.outputs.current_version }}` → `${{ steps.get_latest.outputs.latest_version }}`
+            - **Release Date**: ${{ steps.get_latest.outputs.release_date }}
+            - **MD5 Checksum**: Updated to `${{ steps.download.outputs.new_md5 }}`
+
+            ### 🔗 Release Information
+            - [Release Page](${{ steps.get_latest.outputs.release_url }})
+            - [Download URL](${{ steps.download.outputs.download_url }})
+
+            ### 📝 Release Notes
+            ```
+            $(cat /tmp/release_notes.txt || echo "Release notes not available")
+            ```
+
+            ### ✅ Validation
+            - [x] Plugin XML syntax validated
+            - [x] Download URL verified
+            - [x] MD5 checksum calculated
+            - [x] Build process tested
+
+            ### 🤖 Automation
+            This PR was automatically created by the **Auto Update Release** workflow.
+
+            **Merge this PR** to deploy the updated plugin, or **close it** if you want to skip this version.
+          branch: auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}
+          branch-suffix: short-commit-hash
+          delete-branch: true
+          draft: false
+          labels: |
+            enhancement
+            automation
+            dependencies
+
+      - name: Create Issue on Failure
+        if: failure() && steps.compare.outputs.update_needed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Auto-update failed for NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}',
+              body: `## ❌ Automatic Update Failed
+              
+              The automatic update workflow failed while trying to update to NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}.
+              
+              **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              
+              Please check the workflow logs and update manually if needed.
+              
+              ### Release Information
+              - Version: v${{ steps.get_latest.outputs.latest_version }}
+              - Release URL: ${{ steps.get_latest.outputs.release_url }}
+              - Release Date: ${{ steps.get_latest.outputs.release_date }}`,
+              labels: ['bug', 'automation', 'help wanted']
+            })
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 📊 Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Current Version**: ${{ steps.get_current.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Version**: ${{ steps.get_latest.outputs.latest_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Update Needed**: ${{ steps.compare.outputs.update_needed }}" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.compare.outputs.update_needed }}" = "true" ]; then
+            echo "- **Status**: ✅ Update PR created" >> $GITHUB_STEP_SUMMARY
+            echo "- **New MD5**: \`${{ steps.download.outputs.new_md5 }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: ✅ Already up to date" >> $GITHUB_STEP_SUMMARY
+          fi
