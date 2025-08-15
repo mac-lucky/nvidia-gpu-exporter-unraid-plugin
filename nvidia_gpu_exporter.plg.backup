@@ -18,8 +18,8 @@
         support="&gitURL;/issues">
 
 <CHANGES>
-###1.3.2###
-- Updated to NVIDIA GPU Exporter v1.3.2
+###&version;###
+- Unraid plugin release
 - Auto-discovery of nvidia-smi metric fields
 - Configurable web interface on port 9835
 - Systemd service management
