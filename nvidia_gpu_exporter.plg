@@ -203,7 +203,7 @@ if ($_POST['action']) {
 Install plugin icon
 -->
 <FILE Name="/usr/local/emhttp/plugins/&name;/images/nvidia_exporter.png" Mode="0644">
-<URL>https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/nvidia_exporter.png</URL>
+<URL>https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_exporter.png</URL>
 </FILE>
 
 <!--
