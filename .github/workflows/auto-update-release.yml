@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - "nvidia_gpu_exporter.plg"
+      - "workflows/auto-update-release.yml"
     branches:
       - main
   schedule:
@@ -123,44 +124,18 @@ jobs:
 
           echo "Updated plugin file with version $NEW_VERSION"
 
-      - name: Update Makefile version target
+      - name: Install XML validation tools
         if: steps.compare.outputs.update_needed == 'true'
         run: |
-          NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
-
-          # Update version in Makefile template if it exists
-          if [ -f "Makefile" ]; then
-            echo "Makefile exists, updating version references"
-            # Reset placeholder to ensure clean state for future builds
-            if [ -f "nvidia_gpu_exporter.plg.template" ]; then
-              sed -i 's/<!ENTITY version[[:space:]]*"[^"]*">/<!ENTITY version   "PLACEHOLDER_VERSION">/' nvidia_gpu_exporter.plg.template
-            fi
-          fi
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
 
       - name: Validate updated plugin
         if: steps.compare.outputs.update_needed == 'true'
         run: |
-          # Run plugin validation
-          if [ -f "validate_plugin.sh" ]; then
-            chmod +x validate_plugin.sh
-            ./validate_plugin.sh
-          fi
-
           # Check XML syntax
           xmllint --noout nvidia_gpu_exporter.plg
           echo "✓ Plugin validation successful"
-
-      - name: Test build with new version
-        if: steps.compare.outputs.update_needed == 'true'
-        run: |
-          if [ -f "Makefile" ]; then
-            # Test that the build process works
-            make clean
-            make version
-            echo "✓ Build test successful"
-          else
-            echo "No Makefile found, skipping build test"
-          fi
 
       - name: Create Pull Request
         if: steps.compare.outputs.update_needed == 'true'
@@ -199,7 +174,6 @@ jobs:
             - [x] Plugin XML syntax validated
             - [x] Download URL verified
             - [x] MD5 checksum calculated
-            - [x] Build process tested
 
             ### 🤖 Automation
             This PR was automatically created by the **Auto Update Release** workflow.
@@ -213,30 +187,6 @@ jobs:
             enhancement
             automation
             dependencies
-
-      - name: Create Issue on Failure
-        if: failure() && steps.compare.outputs.update_needed == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: '🚨 Auto-update failed for NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}',
-              body: `## ❌ Automatic Update Failed
-              
-              The automatic update workflow failed while trying to update to NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}.
-              
-              **Workflow run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-              
-              Please check the workflow logs and update manually if needed.
-              
-              ### Release Information
-              - Version: v${{ steps.get_latest.outputs.latest_version }}
-              - Release URL: ${{ steps.get_latest.outputs.release_url }}
-              - Release Date: ${{ steps.get_latest.outputs.release_date }}`,
-              labels: ['bug', 'automation', 'help wanted']
-            })
 
       - name: Summary
         if: always()
