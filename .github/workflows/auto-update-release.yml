@@ -47,9 +47,12 @@ jobs:
           echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
           echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
 
-          # Save release notes for PR description
-          echo "$RELEASE_NOTES" > /tmp/release_notes.txt
-          echo "Release notes saved to /tmp/release_notes.txt"
+          # Handle multiline release notes properly for GitHub Actions
+          {
+            echo "release_notes<<EOF"
+            echo "$RELEASE_NOTES"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
 
       - name: Get current version from plugin
         id: get_current
@@ -168,7 +171,7 @@ jobs:
 
             ### 📝 Release Notes
             ```
-            $(cat /tmp/release_notes.txt || echo "Release notes not available")
+            ${{ steps.get_latest.outputs.release_notes || 'Release notes not available' }}
             ```
 
             ### ✅ Validation
@@ -190,6 +193,36 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Wait for merge and cleanup branch
+        if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
+        run: |
+          PR_NUMBER="${{ steps.create_pr.outputs.pull-request-number }}"
+          BRANCH_NAME="auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}-$(git rev-parse --short HEAD)"
+
+          echo "Waiting for PR #$PR_NUMBER to be merged..."
+
+          # Wait for PR to be merged (max 5 minutes)
+          for i in {1..30}; do
+            PR_STATE=$(gh pr view $PR_NUMBER --json state -q '.state')
+            if [ "$PR_STATE" = "MERGED" ]; then
+              echo "✅ PR #$PR_NUMBER has been merged successfully"
+              
+              # Delete the remote branch
+              echo "🗑️ Cleaning up branch: $BRANCH_NAME"
+              git push origin --delete "$BRANCH_NAME" || echo "Branch may have already been deleted"
+              echo "✅ Branch cleanup completed"
+              break
+            elif [ "$PR_STATE" = "CLOSED" ]; then
+              echo "❌ PR #$PR_NUMBER was closed without merging"
+              break
+            else
+              echo "⏳ PR #$PR_NUMBER is still $PR_STATE, waiting... (attempt $i/30)"
+              sleep 10
+            fi
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Summary
         if: always()
         run: |
@@ -199,8 +232,12 @@ jobs:
           echo "- **Update Needed**: ${{ steps.compare.outputs.update_needed }}" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ steps.compare.outputs.update_needed }}" = "true" ]; then
-            echo "- **Status**: ✅ Update PR created" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: ✅ Update PR created and auto-merged" >> $GITHUB_STEP_SUMMARY
             echo "- **New MD5**: \`${{ steps.download.outputs.new_md5 }}\`" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.create_pr.outputs.pull-request-number }}" != "" ]; then
+              echo "- **PR**: [#${{ steps.create_pr.outputs.pull-request-number }}](${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.create_pr.outputs.pull-request-number }})" >> $GITHUB_STEP_SUMMARY
+              echo "- **Branch**: 🗑️ Automatically cleaned up after merge" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "- **Status**: ✅ Already up to date" >> $GITHUB_STEP_SUMMARY
           fi
