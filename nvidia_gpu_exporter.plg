@@ -2,10 +2,10 @@
 
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia_gpu_exporter">
-<!ENTITY author    "mac-lucky">
+<!ENTITY author    "utkuozdemir">
 <!ENTITY version   "1.3.2">
-<!ENTITY launch    "UserUtilities/nvidia_gpu_exporter">
-<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia_gpu_exporter">
+<!ENTITY launch    "Settings/nvidia_gpu_exporter">
+<!ENTITY gitURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter">
 <!ENTITY pluginURL "https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/&name;.plg">
 ]>
 
@@ -48,7 +48,7 @@ rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/
 Download the binary package
 -->
 <FILE Name="/boot/config/plugins/&name;/&name;-&version;-linux-amd64.tar.gz">
-<URL>https://github.com/&author;/&name;/releases/download/v&version;/&name;_&version;_linux_x86_64.tar.gz</URL>
+<URL>https://github.com/&author;/&name;/releases/download/v&version;1.3.2&name;_&version;_linux_x86_64.tar.gz</URL>
 <MD5>18fda6e8b4f2efda39523bc75d1410f6</MD5>
 </FILE>
 
@@ -200,21 +200,14 @@ if ($_POST['action']) {
 </FILE>
 
 <!--
-Install plugin icon
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/images/nvidia_exporter.png" Mode="0644">
-<URL>https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/nvidia_exporter.png</URL>
-</FILE>
-
-<!--
 Install web interface page
 -->
 <FILE Name="/usr/local/emhttp/plugins/&name;/&name;.page">
 <INLINE>
 <![CDATA[
-Menu="UserUtilities"
+Menu="NetworkServices"
 Title="NVIDIA GPU Exporter"
-Icon="nvidia_exporter.png"
+Icon="graph"
 ---
 <?php
 $plugin = "nvidia_gpu_exporter";
