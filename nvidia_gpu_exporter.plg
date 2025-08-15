@@ -1,52 +1,58 @@
 <?xml version='1.0' standalone='yes'?>
+
 <!DOCTYPE PLUGIN [
-  <!ENTITY name      "nvidia_gpu_exporter">
-  <!ENTITY author    "maclucky">
-  <!ENTITY version   "1.3.2">
-  <!ENTITY launch    "Settings/nvidia_gpu_exporter">
-  <!ENTITY gitURL    "https://github.com/maclucky/nvidia-gpu-exporter-plugin">
-  <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
+<!ENTITY name      "nvidia_gpu_exporter">
+<!ENTITY author    "mac-lucky">
+<!ENTITY version   "1.3.2">
+<!ENTITY launch    "UserUtilities/nvidia_gpu_exporter">
+<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
 ]>
 
-<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" icon="nvidia_exporter.png" min="6.11.0">
+<PLUGIN name="&name;"
+        author="&author;"
+        version="&version;"
+        launch="&launch;"
+        pluginURL="&pluginURL;"
+        min="6.9.0"
+        support="&gitURL;/issues">
 
 <CHANGES>
-##NVIDIA GPU Exporter
-
-###2024.01.15
-- Initial Release
-- NVIDIA GPU metrics exporter for Prometheus
-- Basic configuration interface
-- Service management controls
+###1.3.2###
+- Updated to NVIDIA GPU Exporter v1.3.2
+- Auto-discovery of nvidia-smi metric fields
+- Configurable web interface on port 9835
+- Systemd service management
+- Support for remote nvidia-smi execution
 </CHANGES>
 
 <!--
-Install the plugin archive.
+Copyright 2025, mac-lucky
+NVIDIA GPU Exporter plugin for Unraid.
+
+Plugin file for NVIDIA GPU Exporter
+Original software: https://github.com/utkuozdemir/nvidia_gpu_exporter
+Plugin repository: https://github.com/mac-lucky/nvidia-gpu-exporter-plugin
 -->
+
 <FILE Run="/bin/bash">
 <INLINE>
-VERSION="1.2.2"
-ARCHIVE_PATH="/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-${VERSION}-linux-amd64.tar.gz"
-
-# Create plugin directory
-mkdir -p /boot/config/plugins/nvidia_gpu_exporter
-
-# Download if not exists
-if [ ! -f "$ARCHIVE_PATH" ]; then
-    echo "Downloading nvidia_gpu_exporter v${VERSION}..."
-    wget -O "$ARCHIVE_PATH" "https://github.com/prometheus/nvidia_gpu_exporter/releases/download/v${VERSION}/nvidia_gpu_exporter-${VERSION}.linux-amd64.tar.gz"
-    if [ $? -ne 0 ]; then
-        echo "Error: Failed to download nvidia_gpu_exporter"
-        exit 1
-    fi
-fi
-
-echo "Archive downloaded successfully"
+# Remove old plugin files
+rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.txz 2>/dev/null|head -n1)
+rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/dev/null|head -n1)
 </INLINE>
 </FILE>
 
 <!--
-Install default configuration file
+Download the binary package
+-->
+<FILE Name="/boot/config/plugins/&name;/&name;-&version;-linux-amd64.tar.gz">
+<URL>https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz</URL>
+<MD5>18fda6e8b4f2efda39523bc75d1410f6</MD5>
+</FILE>
+
+<!--
+The 'plugin' config file
 -->
 <FILE Name="/boot/config/plugins/&name;/&name;.cfg">
 <INLINE>
@@ -73,7 +79,7 @@ case "$1" in
     if [ "$SERVICE" == "enable" ]; then
       echo "Starting NVIDIA GPU Exporter..."
       # Check if nvidia-smi is available
-      if ! command -v nvidia-smi &> /dev/null && [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
+      if ! command -v nvidia-smi &amp;&gt; /dev/null &amp;&amp; [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
         echo "nvidia-smi not found. Please install NVIDIA drivers first."
         exit 1
       fi
@@ -83,19 +89,19 @@ case "$1" in
         --web.listen-address=":$PORT" \
         --nvidia-smi-command="$NVIDIASMI" \
         --query-field-names="$QUERYFIELDS" \
-        >> "$LOGFILE" 2>&1 &
+        &gt;&gt; "$LOGFILE" 2&gt;&amp;1 &amp;
       
-      echo $! > /var/run/nvidia_gpu_exporter.pid
+      echo $! &gt; /var/run/nvidia_gpu_exporter.pid
       echo "NVIDIA GPU Exporter started on port $PORT"
     fi
     ;;
   'stop')
     echo "Stopping NVIDIA GPU Exporter..."
     if [ -f /var/run/nvidia_gpu_exporter.pid ]; then
-      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2>/dev/null
+      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2&gt;/dev/null
       rm -f /var/run/nvidia_gpu_exporter.pid
     fi
-    killall nvidia_gpu_exporter 2>/dev/null
+    killall nvidia_gpu_exporter 2&gt;/dev/null
     echo "NVIDIA GPU Exporter stopped"
     ;;
   'restart')
@@ -111,79 +117,101 @@ esac
 </FILE>
 
 <!--
-Install service control script
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/scripts/service_control.php">
-<INLINE>
-<?php
-if ($_POST['action']) {
-    $action = $_POST['action'];
-    switch($action) {
-        case 'start':
-            exec('/etc/rc.d/rc.nvidia_gpu_exporter start', $output, $return_var);
-            break;
-        case 'stop':
-            exec('/etc/rc.d/rc.nvidia_gpu_exporter stop', $output, $return_var);
-            break;
-        case 'restart':
-            exec('/etc/rc.d/rc.nvidia_gpu_exporter restart', $output, $return_var);
-            break;
-        default:
-            echo "Invalid action";
-            exit(1);
-    }
-    echo implode("\n", $output);
-}
-?>
-</INLINE>
-</FILE>
-
-<!--
 Install metrics proxy script
 -->
 <FILE Name="/usr/local/emhttp/plugins/&name;/scripts/get_metrics.php">
 <INLINE>
+<![CDATA[
 <?php
+// Read configuration
 $cfg = parse_ini_file("/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg");
-$port = isset($cfg['PORT']) ? $cfg['PORT'] : '9835';
-$url = "http://localhost:$port/metrics";
 
+if (!$cfg || !isset($cfg['PORT'])) {
+    http_response_code(500);
+    echo "Unable to read configuration";
+    exit;
+}
+
+$port = $cfg['PORT'];
+$url = "http://127.0.0.1:$port/metrics";
+
+// Use curl to fetch metrics
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $url);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 2);
+curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 
-$response = curl_exec($ch);
-$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$output = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$error = curl_error($ch);
 curl_close($ch);
 
-if ($http_code == 200 && $response !== false) {
-    echo $response;
-} else {
-    echo "Error: Unable to fetch metrics from localhost:$port/metrics";
+if ($output === false || $httpCode !== 200) {
+    http_response_code(500);
+    echo "Unable to fetch metrics from $url";
+    if ($error) {
+        echo " (Error: $error)";
+    }
+    exit;
 }
+
+// Return the metrics
+header('Content-Type: text/plain');
+echo $output;
 ?>
+]]>
 </INLINE>
 </FILE>
 
 <!--
-Install web interface page descriptor
+Install service control script
+-->
+<FILE Name="/usr/local/emhttp/plugins/&name;/scripts/service_control.php">
+<INLINE>
+<![CDATA[
+<?php
+if ($_POST['action']) {
+    $action = $_POST['action'];
+    
+    // Validate action
+    if (!in_array($action, ['start', 'stop', 'restart'])) {
+        http_response_code(400);
+        echo "Invalid action";
+        exit;
+    }
+    
+    // Execute the service command
+    $command = "/etc/rc.d/rc.nvidia_gpu_exporter " . escapeshellarg($action);
+    $output = shell_exec($command . " 2>&1");
+    
+    // Return the output
+    echo $output;
+} else {
+    http_response_code(400);
+    echo "No action specified";
+}
+?>
+]]>
+</INLINE>
+</FILE>
+
+<!--
+Install plugin icon
+-->
+<FILE Name="/usr/local/emhttp/plugins/&name;/images/nvidia_exporter.png" Mode="0644">
+<URL>https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_exporter.png</URL>
+</FILE>
+
+<!--
+Install web interface page
 -->
 <FILE Name="/usr/local/emhttp/plugins/&name;/&name;.page">
 <INLINE>
-Menu="Settings"
+<![CDATA[
+Menu="UserUtilities"
 Title="NVIDIA GPU Exporter"
-Icon="nvidia_exporter.png"
 ---
-</INLINE>
-</FILE>
-
-<!--
-Install web interface PHP page
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/&name;.php">
-<INLINE>
 <?php
 $plugin = "nvidia_gpu_exporter";
 $cfg = parse_ini_file("/boot/config/plugins/$plugin/$plugin.cfg");
@@ -196,6 +224,7 @@ $cfg['SERVICE'] = isset($cfg['SERVICE']) ? $cfg['SERVICE'] : 'enable';
 $cfg['PORT'] = isset($cfg['PORT']) ? $cfg['PORT'] : '9835';
 $cfg['NVIDIASMI'] = isset($cfg['NVIDIASMI']) ? $cfg['NVIDIASMI'] : '/usr/bin/nvidia-smi';
 $cfg['QUERYFIELDS'] = isset($cfg['QUERYFIELDS']) ? $cfg['QUERYFIELDS'] : 'AUTO';
+$cfg['USER_OPTS'] = isset($cfg['USER_OPTS']) ? $cfg['USER_OPTS'] : '';
 
 $service_running = trim(shell_exec("ps aux | grep '[n]vidia_gpu_exporter' | wc -l")) > 0;
 $pid_file = "/var/run/nvidia_gpu_exporter.pid";
@@ -204,6 +233,35 @@ $service_pid = file_exists($pid_file) ? trim(file_get_contents($pid_file)) : "";
 
 <form markdown="1" method="POST" action="/update.php" target="progressFrame">
 <input type="hidden" name="#file" value="/boot/config/plugins/<?=$plugin?>/<?=$plugin?>.cfg">
+
+Service Status:
+: <span class="<?=($service_running ? 'green-text' : 'red-text')?>"><?=($service_running ? 'Running' : 'Stopped')?></span>
+  <?php if($service_running && $service_pid): ?>
+  (PID: <?=$service_pid?>)
+  <?php endif; ?>
+
+Enable Service:
+: <select name="SERVICE" size="1">
+  <?=mk_option($cfg['SERVICE'], "disable", "No");?>
+  <?=mk_option($cfg['SERVICE'], "enable", "Yes");?>
+  </select>
+
+Port:
+: <input type="number" name="PORT" min="1024" max="65535" value="<?=htmlspecialchars($cfg['PORT'])?>" class="narrow">
+  <blockquote class="inline_help">
+  <p>Port for the metrics endpoint (default: 9835)</p>
+  </blockquote>
+
+&nbsp;
+: <input type="submit" value="Apply"><input type="button" value="Done" onclick="done()">
+</form>
+
+<script>
+function done(){
+  parent.parent.Shadowbox.close();
+}
+</script>
+]]>
 
 Service Status:
 : <span class="<?=($service_running ? 'green-text' : 'red-text')?>"><?=($service_running ? 'Running' : 'Stopped')?></span>
@@ -237,6 +295,12 @@ Query Fields:
   </select>
   <blockquote class="inline_help">
   <p>Fields to query from nvidia-smi. AUTO will auto-detect available fields.</p>
+  </blockquote>
+
+Additional Options:
+: <input type="text" name="USER_OPTS" value="<?=htmlspecialchars($cfg['USER_OPTS'])?>" class="wide">
+  <blockquote class="inline_help">
+  <p>Additional command line options</p>
   </blockquote>
 
 &nbsp;
@@ -286,6 +350,7 @@ function serviceControl(action) {
     .fail(function(xhr, status, error) {
       console.error('Service control failed:', error);
       alert('Failed to ' + action + ' service: ' + error);
+      // Re-enable buttons on failure
       setTimeout(function() {
         location.reload();
       }, 1000);
@@ -304,15 +369,7 @@ $.get('/plugins/nvidia_gpu_exporter/scripts/get_metrics.php')
   });
 <?php endif; ?>
 </script>
-</INLINE>
-</FILE>
-
-<!--
-Install plugin icon
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/images/nvidia_exporter.png" Type="base64">
-<INLINE>
-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
+]]>
 </INLINE>
 </FILE>
 
@@ -370,7 +427,7 @@ chmod 644 /usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/*.php 2>/dev/nul
 rm -rf /tmp/nvidia_gpu_exporter*
 
 echo "NVIDIA GPU Exporter plugin installed successfully"
-echo "Please refresh your browser and navigate to Settings > NVIDIA GPU Exporter"
+echo "Please refresh your browser and navigate to User Utilities > NVIDIA GPU Exporter"
 </INLINE>
 </FILE>
 
@@ -387,7 +444,7 @@ rm -f /usr/local/bin/nvidia_gpu_exporter
 rm -f /etc/rc.d/rc.nvidia_gpu_exporter
 rm -rf /boot/config/plugins/nvidia_gpu_exporter
 
-# Remove web interface files
+# Remove web interface files (if any)
 rm -rf /usr/local/emhttp/plugins/nvidia_gpu_exporter
 
 echo "NVIDIA GPU Exporter plugin removed successfully"
