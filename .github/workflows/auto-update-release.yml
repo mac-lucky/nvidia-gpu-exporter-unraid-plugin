@@ -139,6 +139,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.compare.outputs.update_needed == 'true'
+        id: create_pr
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -176,9 +177,7 @@ jobs:
             - [x] MD5 checksum calculated
 
             ### 🤖 Automation
-            This PR was automatically created by the **Auto Update Release** workflow.
-
-            **Merge this PR** to deploy the updated plugin, or **close it** if you want to skip this version.
+            This PR was automatically created and will be auto-merged by the **Auto Update Release** workflow.
           branch: auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}
           branch-suffix: short-commit-hash
           delete-branch: true
@@ -187,6 +186,13 @@ jobs:
             enhancement
             automation
             dependencies
+
+      - name: Auto-merge Pull Request
+        if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
+        run: |
+          gh pr merge ${{ steps.create_pr.outputs.pull-request-number }} --squash --auto
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
         if: always()
