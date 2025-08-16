@@ -1,243 +1,243 @@
-name: Auto Update NVIDIA GPU Exporter Release
+# name: Auto Update NVIDIA GPU Exporter Release
 
-on:
-  push:
-    paths:
-      - "nvidia_gpu_exporter.plg"
-      - ".github/workflows/auto-update-release.yml"
-    branches:
-      - main
-  schedule:
-    # Run every Monday at 9:00 AM UTC (weekly check)
-    - cron: "0 9 * * 1"
-  workflow_dispatch:
-    # Allow manual triggering
-    inputs:
-      force_update:
-        description: "Force update even if already latest"
-        required: false
-        type: boolean
-        default: false
+# on:
+#   push:
+#     paths:
+#       - "nvidia_gpu_exporter.plg"
+#       - ".github/workflows/auto-update-release.yml"
+#     branches:
+#       - main
+#   schedule:
+#     # Run every Monday at 9:00 AM UTC (weekly check)
+#     - cron: "0 9 * * 1"
+#   workflow_dispatch:
+#     # Allow manual triggering
+#     inputs:
+#       force_update:
+#         description: "Force update even if already latest"
+#         required: false
+#         type: boolean
+#         default: false
 
-permissions:
-  contents: write
-  pull-requests: write
+# permissions:
+#   contents: write
+#   pull-requests: write
 
-jobs:
-  check-and-update:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
+# jobs:
+#   check-and-update:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           fetch-depth: 0
 
-      - name: Get latest NVIDIA GPU Exporter release
-        id: get_latest
-        run: |
-          # Get latest release info from GitHub API
-          LATEST_RELEASE=$(curl -s "https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest")
-          LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name' | sed 's/^v//')
-          RELEASE_URL=$(echo "$LATEST_RELEASE" | jq -r '.html_url')
-          RELEASE_DATE=$(echo "$LATEST_RELEASE" | jq -r '.published_at')
-          RELEASE_NOTES=$(echo "$LATEST_RELEASE" | jq -r '.body' | head -10)
+#       - name: Get latest NVIDIA GPU Exporter release
+#         id: get_latest
+#         run: |
+#           # Get latest release info from GitHub API
+#           LATEST_RELEASE=$(curl -s "https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest")
+#           LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name' | sed 's/^v//')
+#           RELEASE_URL=$(echo "$LATEST_RELEASE" | jq -r '.html_url')
+#           RELEASE_DATE=$(echo "$LATEST_RELEASE" | jq -r '.published_at')
+#           RELEASE_NOTES=$(echo "$LATEST_RELEASE" | jq -r '.body' | head -10)
 
-          echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
-          echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
-          echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
+#           echo "latest_version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+#           echo "release_url=$RELEASE_URL" >> $GITHUB_OUTPUT
+#           echo "release_date=$RELEASE_DATE" >> $GITHUB_OUTPUT
 
-          # Handle multiline release notes properly for GitHub Actions
-          {
-            echo "release_notes<<EOF"
-            echo "$RELEASE_NOTES"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
+#           # Handle multiline release notes properly for GitHub Actions
+#           {
+#             echo "release_notes<<EOF"
+#             echo "$RELEASE_NOTES"
+#             echo "EOF"
+#           } >> $GITHUB_OUTPUT
 
-      - name: Get current version from plugin
-        id: get_current
-        run: |
-          # Extract current version from the plugin file
-          if [ -f "nvidia_gpu_exporter.plg" ]; then
-            CURRENT_VERSION=$(grep '<!ENTITY version' nvidia_gpu_exporter.plg | sed 's/.*"\([^"]*\)".*/\1/')
-            echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "current_version=0.0.0" >> $GITHUB_OUTPUT
-          fi
+#       - name: Get current version from plugin
+#         id: get_current
+#         run: |
+#           # Extract current version from the plugin file
+#           if [ -f "nvidia_gpu_exporter.plg" ]; then
+#             CURRENT_VERSION=$(grep '<!ENTITY version' nvidia_gpu_exporter.plg | sed 's/.*"\([^"]*\)".*/\1/')
+#             echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+#           else
+#             echo "current_version=0.0.0" >> $GITHUB_OUTPUT
+#           fi
 
-      - name: Compare versions
-        id: compare
-        run: |
-          CURRENT="${{ steps.get_current.outputs.current_version }}"
-          LATEST="${{ steps.get_latest.outputs.latest_version }}"
+#       - name: Compare versions
+#         id: compare
+#         run: |
+#           CURRENT="${{ steps.get_current.outputs.current_version }}"
+#           LATEST="${{ steps.get_latest.outputs.latest_version }}"
 
-          echo "Current version: $CURRENT"
-          echo "Latest version: $LATEST"
+#           echo "Current version: $CURRENT"
+#           echo "Latest version: $LATEST"
 
-          if [ "$CURRENT" != "$LATEST" ] || [ "${{ inputs.force_update }}" = "true" ]; then
-            echo "update_needed=true" >> $GITHUB_OUTPUT
-            echo "Update needed: $CURRENT -> $LATEST"
-          else
-            echo "update_needed=false" >> $GITHUB_OUTPUT
-            echo "Already up to date!"
-          fi
+#           if [ "$CURRENT" != "$LATEST" ] || [ "${{ inputs.force_update }}" = "true" ]; then
+#             echo "update_needed=true" >> $GITHUB_OUTPUT
+#             echo "Update needed: $CURRENT -> $LATEST"
+#           else
+#             echo "update_needed=false" >> $GITHUB_OUTPUT
+#             echo "Already up to date!"
+#           fi
 
-      - name: Download and verify new release
-        if: steps.compare.outputs.update_needed == 'true'
-        id: download
-        run: |
-          NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
-          DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${NEW_VERSION}/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz"
+#       - name: Download and verify new release
+#         if: steps.compare.outputs.update_needed == 'true'
+#         id: download
+#         run: |
+#           NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
+#           DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${NEW_VERSION}/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz"
 
-          echo "Downloading: $DOWNLOAD_URL"
+#           echo "Downloading: $DOWNLOAD_URL"
 
-          # Download the new release
-          wget -O "/tmp/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz" "$DOWNLOAD_URL"
+#           # Download the new release
+#           wget -O "/tmp/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz" "$DOWNLOAD_URL"
 
-          # Calculate MD5 checksum
-          NEW_MD5=$(md5sum "/tmp/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz" | cut -d' ' -f1)
-          echo "new_md5=$NEW_MD5" >> $GITHUB_OUTPUT
-          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
-          echo "MD5 checksum: $NEW_MD5"
+#           # Calculate MD5 checksum
+#           NEW_MD5=$(md5sum "/tmp/nvidia_gpu_exporter_${NEW_VERSION}_linux_x86_64.tar.gz" | cut -d' ' -f1)
+#           echo "new_md5=$NEW_MD5" >> $GITHUB_OUTPUT
+#           echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+#           echo "MD5 checksum: $NEW_MD5"
 
-      - name: Update plugin file
-        if: steps.compare.outputs.update_needed == 'true'
-        run: |
-          NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
-          NEW_MD5="${{ steps.download.outputs.new_md5 }}"
-          PLUGIN_FILE="nvidia_gpu_exporter.plg"
+#       - name: Update plugin file
+#         if: steps.compare.outputs.update_needed == 'true'
+#         run: |
+#           NEW_VERSION="${{ steps.get_latest.outputs.latest_version }}"
+#           NEW_MD5="${{ steps.download.outputs.new_md5 }}"
+#           PLUGIN_FILE="nvidia_gpu_exporter.plg"
 
-          # Create backup
-          cp "$PLUGIN_FILE" "${PLUGIN_FILE}.backup"
+#           # Create backup
+#           cp "$PLUGIN_FILE" "${PLUGIN_FILE}.backup"
 
-          # Update version entity
-          sed -i "s/<!ENTITY version[[:space:]]*\"[^\"]*\">/<!ENTITY version   \"$NEW_VERSION\">/" "$PLUGIN_FILE"
+#           # Update version entity
+#           sed -i "s/<!ENTITY version[[:space:]]*\"[^\"]*\">/<!ENTITY version   \"$NEW_VERSION\">/" "$PLUGIN_FILE"
 
-          # Update MD5 checksum
-          sed -i "s/MD5=\"[^\"]*\"/MD5=\"$NEW_MD5\"/" "$PLUGIN_FILE"
+#           # Update MD5 checksum
+#           sed -i "s/MD5=\"[^\"]*\"/MD5=\"$NEW_MD5\"/" "$PLUGIN_FILE"
 
-          # Update CHANGES section
-          NEW_CHANGES="###${NEW_VERSION}###"$'\n'"- Updated to NVIDIA GPU Exporter v${NEW_VERSION}"$'\n'"- Auto-discovery of nvidia-smi metric fields"$'\n'"- Configurable web interface on port 9835"$'\n'"- Systemd service management"$'\n'"- Support for remote nvidia-smi execution"
+#           # Update CHANGES section
+#           NEW_CHANGES="###${NEW_VERSION}###"$'\n'"- Updated to NVIDIA GPU Exporter v${NEW_VERSION}"$'\n'"- Auto-discovery of nvidia-smi metric fields"$'\n'"- Configurable web interface on port 9835"$'\n'"- Systemd service management"$'\n'"- Support for remote nvidia-smi execution"
 
-          # Replace changes content between tags
-          perl -i -pe '
-            BEGIN{undef $/;}
-            s|(<CHANGES>).*?(</CHANGES>)|$1\n'"$NEW_CHANGES"'\n$2|smg
-          ' "$PLUGIN_FILE"
+#           # Replace changes content between tags
+#           perl -i -pe '
+#             BEGIN{undef $/;}
+#             s|(<CHANGES>).*?(</CHANGES>)|$1\n'"$NEW_CHANGES"'\n$2|smg
+#           ' "$PLUGIN_FILE"
 
-          echo "Updated plugin file with version $NEW_VERSION"
+#           echo "Updated plugin file with version $NEW_VERSION"
 
-      - name: Install XML validation tools
-        if: steps.compare.outputs.update_needed == 'true'
-        run: |
-          # Fast install without package cache update
-          sudo apt-get install -y --no-install-recommends libxml2-utils
+#       - name: Install XML validation tools
+#         if: steps.compare.outputs.update_needed == 'true'
+#         run: |
+#           # Fast install without package cache update
+#           sudo apt-get install -y --no-install-recommends libxml2-utils
 
-      - name: Validate updated plugin
-        if: steps.compare.outputs.update_needed == 'true'
-        run: |
-          # Check XML syntax
-          xmllint --noout nvidia_gpu_exporter.plg
-          echo "✓ Plugin validation successful"
+#       - name: Validate updated plugin
+#         if: steps.compare.outputs.update_needed == 'true'
+#         run: |
+#           # Check XML syntax
+#           xmllint --noout nvidia_gpu_exporter.plg
+#           echo "✓ Plugin validation successful"
 
-      - name: Create Pull Request
-        if: steps.compare.outputs.update_needed == 'true'
-        id: create_pr
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: |
-            chore: update NVIDIA GPU Exporter to v${{ steps.get_latest.outputs.latest_version }}
+#       - name: Create Pull Request
+#         if: steps.compare.outputs.update_needed == 'true'
+#         id: create_pr
+#         uses: peter-evans/create-pull-request@v5
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           commit-message: |
+#             chore: update NVIDIA GPU Exporter to v${{ steps.get_latest.outputs.latest_version }}
 
-            - Updated plugin to use NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}
-            - Updated MD5 checksum to ${{ steps.download.outputs.new_md5 }}
-            - Automatic update via GitHub Actions
+#             - Updated plugin to use NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}
+#             - Updated MD5 checksum to ${{ steps.download.outputs.new_md5 }}
+#             - Automatic update via GitHub Actions
 
-            Release URL: ${{ steps.get_latest.outputs.release_url }}
-          title: "🔄 Update NVIDIA GPU Exporter to v${{ steps.get_latest.outputs.latest_version }}"
-          body: |
-            ## 🚀 Automatic Update to NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}
+#             Release URL: ${{ steps.get_latest.outputs.release_url }}
+#           title: "🔄 Update NVIDIA GPU Exporter to v${{ steps.get_latest.outputs.latest_version }}"
+#           body: |
+#             ## 🚀 Automatic Update to NVIDIA GPU Exporter v${{ steps.get_latest.outputs.latest_version }}
 
-            This PR automatically updates the NVIDIA GPU Exporter to the latest version.
+#             This PR automatically updates the NVIDIA GPU Exporter to the latest version.
 
-            ### 📋 Changes
-            - **Version**: `${{ steps.get_current.outputs.current_version }}` → `${{ steps.get_latest.outputs.latest_version }}`
-            - **Release Date**: ${{ steps.get_latest.outputs.release_date }}
-            - **MD5 Checksum**: Updated to `${{ steps.download.outputs.new_md5 }}`
+#             ### 📋 Changes
+#             - **Version**: `${{ steps.get_current.outputs.current_version }}` → `${{ steps.get_latest.outputs.latest_version }}`
+#             - **Release Date**: ${{ steps.get_latest.outputs.release_date }}
+#             - **MD5 Checksum**: Updated to `${{ steps.download.outputs.new_md5 }}`
 
-            ### 🔗 Release Information
-            - [Release Page](${{ steps.get_latest.outputs.release_url }})
-            - [Download URL](${{ steps.download.outputs.download_url }})
+#             ### 🔗 Release Information
+#             - [Release Page](${{ steps.get_latest.outputs.release_url }})
+#             - [Download URL](${{ steps.download.outputs.download_url }})
 
-            ### 📝 Release Notes
-            ```
-            ${{ steps.get_latest.outputs.release_notes || 'Release notes not available' }}
-            ```
+#             ### 📝 Release Notes
+#             ```
+#             ${{ steps.get_latest.outputs.release_notes || 'Release notes not available' }}
+#             ```
 
-            ### ✅ Validation
-            - [x] Plugin XML syntax validated
-            - [x] Download URL verified
-            - [x] MD5 checksum calculated
+#             ### ✅ Validation
+#             - [x] Plugin XML syntax validated
+#             - [x] Download URL verified
+#             - [x] MD5 checksum calculated
 
-            ### 🤖 Automation
-            This PR was automatically created and will be auto-merged by the **Auto Update Release** workflow.
-          branch: auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}
-          branch-suffix: short-commit-hash
-          delete-branch: true
-          draft: false
+#             ### 🤖 Automation
+#             This PR was automatically created and will be auto-merged by the **Auto Update Release** workflow.
+#           branch: auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}
+#           branch-suffix: short-commit-hash
+#           delete-branch: true
+#           draft: false
 
-      - name: Auto-merge Pull Request
-        if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
-        run: |
-          gh pr merge ${{ steps.create_pr.outputs.pull-request-number }} --squash --auto
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       - name: Auto-merge Pull Request
+#         if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
+#         run: |
+#           gh pr merge ${{ steps.create_pr.outputs.pull-request-number }} --squash --auto
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for merge and cleanup branch
-        if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
-        run: |
-          PR_NUMBER="${{ steps.create_pr.outputs.pull-request-number }}"
-          BRANCH_NAME="auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}-$(git rev-parse --short HEAD)"
+#       - name: Wait for merge and cleanup branch
+#         if: steps.compare.outputs.update_needed == 'true' && steps.create_pr.outputs.pull-request-number
+#         run: |
+#           PR_NUMBER="${{ steps.create_pr.outputs.pull-request-number }}"
+#           BRANCH_NAME="auto-update/nvidia-gpu-exporter-v${{ steps.get_latest.outputs.latest_version }}-$(git rev-parse --short HEAD)"
 
-          echo "Waiting for PR #$PR_NUMBER to be merged..."
+#           echo "Waiting for PR #$PR_NUMBER to be merged..."
 
-          # Wait for PR to be merged (max 5 minutes)
-          for i in {1..30}; do
-            PR_STATE=$(gh pr view $PR_NUMBER --json state -q '.state')
-            if [ "$PR_STATE" = "MERGED" ]; then
-              echo "✅ PR #$PR_NUMBER has been merged successfully"
+#           # Wait for PR to be merged (max 5 minutes)
+#           for i in {1..30}; do
+#             PR_STATE=$(gh pr view $PR_NUMBER --json state -q '.state')
+#             if [ "$PR_STATE" = "MERGED" ]; then
+#               echo "✅ PR #$PR_NUMBER has been merged successfully"
               
-              # Delete the remote branch
-              echo "🗑️ Cleaning up branch: $BRANCH_NAME"
-              git push origin --delete "$BRANCH_NAME" || echo "Branch may have already been deleted"
-              echo "✅ Branch cleanup completed"
-              break
-            elif [ "$PR_STATE" = "CLOSED" ]; then
-              echo "❌ PR #$PR_NUMBER was closed without merging"
-              break
-            else
-              echo "⏳ PR #$PR_NUMBER is still $PR_STATE, waiting... (attempt $i/30)"
-              sleep 10
-            fi
-          done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#               # Delete the remote branch
+#               echo "🗑️ Cleaning up branch: $BRANCH_NAME"
+#               git push origin --delete "$BRANCH_NAME" || echo "Branch may have already been deleted"
+#               echo "✅ Branch cleanup completed"
+#               break
+#             elif [ "$PR_STATE" = "CLOSED" ]; then
+#               echo "❌ PR #$PR_NUMBER was closed without merging"
+#               break
+#             else
+#               echo "⏳ PR #$PR_NUMBER is still $PR_STATE, waiting... (attempt $i/30)"
+#               sleep 10
+#             fi
+#           done
+#         env:
+#           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "## 📊 Update Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Current Version**: ${{ steps.get_current.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Latest Version**: ${{ steps.get_latest.outputs.latest_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Update Needed**: ${{ steps.compare.outputs.update_needed }}" >> $GITHUB_STEP_SUMMARY
+#       - name: Summary
+#         if: always()
+#         run: |
+#           echo "## 📊 Update Summary" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Current Version**: ${{ steps.get_current.outputs.current_version }}" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Latest Version**: ${{ steps.get_latest.outputs.latest_version }}" >> $GITHUB_STEP_SUMMARY
+#           echo "- **Update Needed**: ${{ steps.compare.outputs.update_needed }}" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.compare.outputs.update_needed }}" = "true" ]; then
-            echo "- **Status**: ✅ Update PR created and auto-merged" >> $GITHUB_STEP_SUMMARY
-            echo "- **New MD5**: \`${{ steps.download.outputs.new_md5 }}\`" >> $GITHUB_STEP_SUMMARY
-            if [ "${{ steps.create_pr.outputs.pull-request-number }}" != "" ]; then
-              echo "- **PR**: [#${{ steps.create_pr.outputs.pull-request-number }}](${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.create_pr.outputs.pull-request-number }})" >> $GITHUB_STEP_SUMMARY
-              echo "- **Branch**: 🗑️ Automatically cleaned up after merge" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "- **Status**: ✅ Already up to date" >> $GITHUB_STEP_SUMMARY
-          fi
+#           if [ "${{ steps.compare.outputs.update_needed }}" = "true" ]; then
+#             echo "- **Status**: ✅ Update PR created and auto-merged" >> $GITHUB_STEP_SUMMARY
+#             echo "- **New MD5**: \`${{ steps.download.outputs.new_md5 }}\`" >> $GITHUB_STEP_SUMMARY
+#             if [ "${{ steps.create_pr.outputs.pull-request-number }}" != "" ]; then
+#               echo "- **PR**: [#${{ steps.create_pr.outputs.pull-request-number }}](${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.create_pr.outputs.pull-request-number }})" >> $GITHUB_STEP_SUMMARY
+#               echo "- **Branch**: 🗑️ Automatically cleaned up after merge" >> $GITHUB_STEP_SUMMARY
+#             fi
+#           else
+#             echo "- **Status**: ✅ Already up to date" >> $GITHUB_STEP_SUMMARY
+#           fi
