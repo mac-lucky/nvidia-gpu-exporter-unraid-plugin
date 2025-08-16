@@ -1,8 +1,125 @@
-# NVIDIA GPU Exporter Unraid Plugin
+# Nvidia GPU Exporter Plugin for Unraid
 
-This plugin provides easy installation and management of the NVIDIA GPU Exporter on Unraid systems with automated dependency management.
+This plugin provides Prometheus metrics for Nvidia GPUs on Unraid systems using the [nvidia_gpu_exporter](https://github.com/utkuozdemir/nvidia_gpu_exporter) by utkuozdemir.
 
-## 🔄 Automated Updates
+## Features
+
+- **Easy Installation**: One-click installation through Unraid's plugin system
+- **Web Interface**: Start, stop, and restart the exporter through the Unraid web UI
+- **Configurable**: Adjust port, log level, and autostart settings
+- **Prometheus Ready**: Exposes metrics in Prometheus format
+- **Auto-start**: Optionally start the exporter automatically when the system boots
+
+## Metrics Provided
+
+The exporter provides comprehensive GPU metrics including:
+
+- GPU utilization percentage
+- Memory usage (used, free, total)
+- Temperature readings
+- Power consumption
+- Fan speed
+- Clock speeds (graphics, memory, SM, video)
+- Process information (running processes on GPU)
+- Driver version information
+
+## Installation
+
+1. Go to **Plugins** in your Unraid web interface
+2. Click on **Install Plugin**
+3. Enter the plugin URL: `https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg`
+4. Click **Install**
+
+## Configuration
+
+After installation, navigate to **Settings** > **Nvidia GPU Exporter** to configure:
+
+- **Port**: The port on which the exporter will listen (default: 9835)
+- **Log Level**: Logging verbosity (debug, info, warn, error)
+- **Auto Start**: Whether to start the exporter automatically on boot
+
+## Usage
+
+### Web Interface
+
+1. Go to **Tools** > **Nvidia GPU Exporter**
+2. Use the **Start**, **Stop**, or **Restart** buttons to control the service
+3. When running, metrics are available at: `http://your-server-ip:9835/metrics`
+
+### Prometheus Configuration
+
+Add the following to your Prometheus configuration:
+
+```yaml
+scrape_configs:
+  - job_name: 'nvidia-gpu'
+    static_configs:
+      - targets: ['your-unraid-server:9835']
+    scrape_interval: 15s
+```
+
+### Grafana Dashboard
+
+You can use existing Grafana dashboards for nvidia_gpu_exporter, such as:
+- Dashboard ID: 14574 (Nvidia GPU Exporter)
+- Or create your own custom dashboard using the available metrics
+
+## Metrics Endpoint
+
+Once running, metrics are available at:
+```
+http://your-server-ip:9835/metrics
+```
+
+Example metrics include:
+```
+nvidia_gpu_utilization_gpu{gpu="0"} 45
+nvidia_gpu_memory_used_bytes{gpu="0"} 2147483648
+nvidia_gpu_temperature_celsius{gpu="0"} 67
+nvidia_gpu_power_draw_watts{gpu="0"} 150
+```
+
+## Requirements
+
+- Unraid 6.9.0 or later
+- Nvidia GPU with drivers installed
+- Nvidia drivers must be loaded and functioning
+
+## Troubleshooting
+
+### Service Won't Start
+1. Check that Nvidia drivers are properly installed and loaded
+2. Verify the GPU is detected: `nvidia-smi`
+3. Check the log file: `/var/log/nvidia_gpu_exporter.log`
+
+### No Metrics Available
+1. Ensure the service is running
+2. Check that the configured port is not blocked by firewall
+3. Verify Nvidia drivers are working: `nvidia-smi`
+
+### Permission Issues
+1. Ensure the nvidia_gpu_exporter binary has execute permissions
+2. Check that the service can access GPU information
+
+## Files and Directories
+
+- Plugin files: `/usr/local/emhttp/plugins/nvidia_gpu_exporter/`
+- Binary: `/usr/local/bin/nvidia_gpu_exporter`
+- Configuration: `/boot/config/plugins/nvidia_gpu_exporter/settings.cfg`
+- Logs: `/var/log/nvidia_gpu_exporter.log`
+- PID file: `/var/run/nvidia_gpu_exporter.pid`
+
+## Support
+
+For issues with this plugin:
+- [GitHub Issues](https://github.com/mac-lucky/nvidia-gpu-exporter-plugin/issues)
+
+For issues with the underlying exporter:
+- [nvidia_gpu_exporter GitHub](https://github.com/utkuozdemir/nvidia_gpu_exporter)
+
+## License
+
+This plugin is released under the MIT License. The nvidia_gpu_exporter binary is subject to its own license terms.
 
 This plugin repository includes automated dependency management via GitHub Actions:
 
