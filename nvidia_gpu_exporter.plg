@@ -1,0 +1,54 @@
+<?xml version="1.0" standalone="yes"?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name "nvidia-gpu-exporter">
+<!ENTITY author "mac-lucky">
+<!ENTITY version "1.3.2">
+<!ENTITY launch "Settings/nvidia-gpu-exporter">
+<!ENTITY plugdir "/usr/local/emhttp/plugins/&name;">
+<!ENTITY github "utkuozdemir/nvidia_gpu_exporter">
+<!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
+]>
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" launch="&launch;">
+
+<CHANGES>
+### 1.3.2
+- Initial Release
+</CHANGES>
+
+<EXEC>
+mkdir -p &plugdir;
+</EXEC>
+
+<EXEC>
+wget -O /tmp/nvidia_gpu_exporter.tar.gz https://github.com/&github;/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_amd64.tar.gz
+</EXEC>
+
+<EXEC>
+tar -C &plugdir; -xvf /tmp/nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
+</EXEC>
+
+<EXEC>
+mkdir -p &plugdir;/source/nvidia-gpu-exporter/images
+</EXEC>
+
+<EXEC>
+wget -O &plugdir;/source/nvidia-gpu-exporter/nvidia-gpu-exporter.page https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/source/nvidia-gpu-exporter/nvidia-gpu-exporter.page
+</EXEC>
+
+<EXEC>
+wget -O &plugdir;/source/nvidia-gpu-exporter/nvidia-gpu-exporter.php https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/source/nvidia-gpu-exporter/nvidia-gpu-exporter.php
+</EXEC>
+
+<EXEC>
+wget -O &plugdir;/source/nvidia-gpu-exporter/images/icon.png https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_exporter.png
+</EXEC>
+
+<EXEC>
+chmod +x &plugdir;/nvidia_gpu_exporter
+</EXEC>
+
+<EXEC>
+rm /tmp/nvidia_gpu_exporter.tar.gz
+</EXEC>
+
+</PLUGIN>
