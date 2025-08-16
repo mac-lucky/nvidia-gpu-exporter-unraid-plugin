@@ -146,7 +146,7 @@ $cfg = parse_ini_file("/boot/config/plugins/$plugin/$plugin.cfg");
 $var = parse_ini_file("/var/local/emhttp/var.ini");
 
 // Service status
-$isRunning = trim(shell_exec("pgrep nvidia_gpu_exporter")) ? true : false;
+$isRunning = !empty(trim(shell_exec('pgrep -f "/usr/local/bin/nvidia_gpu_exporter"')));
 $port = $cfg['PORT'] ?: '9835';
 $bind_address = $cfg['BIND_ADDRESS'] ?: '0.0.0.0';
 $autostart = $cfg['AUTOSTART'] ?: 'yes';
@@ -309,39 +309,53 @@ $response['success'] = $result['success'];
 $response['message'] = $result['message'];
 echo json_encode($response);
 
+function isServiceRunning() {
+    // More robust process detection - check for exact binary
+    $result = trim(shell_exec('pgrep -f nvidia_gpu_exporter'));
+    return !empty($result);
+}
+
 function startService() {
     // Check if already running before attempting to start
-    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
-    if ($isRunning) {
+    if (isServiceRunning()) {
         return ['success' => true, 'message' => 'Service is already running'];
     }
     
     $output = shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/start 2>&1');
-    sleep(3); // Give it a bit more time to start
     
-    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
-    if ($isRunning) {
-        return ['success' => true, 'message' => 'Service started successfully'];
-    } else {
-        return ['success' => false, 'message' => 'Failed to start service: ' . trim($output)];
+    // Give it time to start and verify multiple times
+    for ($i = 0; $i < 6; $i++) {
+        sleep(1);
+        if (isServiceRunning()) {
+            return ['success' => true, 'message' => 'Service started successfully'];
+        }
     }
+    
+    // If we get here, service failed to start
+    $logOutput = '';
+    if (file_exists('/var/log/nvidia_gpu_exporter.log')) {
+        $logOutput = "\nLog: " . trim(shell_exec('tail -3 /var/log/nvidia_gpu_exporter.log 2>/dev/null'));
+    }
+    
+    return ['success' => false, 'message' => 'Failed to start service: ' . trim($output) . $logOutput];
 }
 
 function stopService() {
-    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
-    if (!$isRunning) {
+    if (!isServiceRunning()) {
         return ['success' => true, 'message' => 'Service is already stopped'];
     }
     
-    shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/stop 2>&1');
-    sleep(2);
+    $output = shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/stop 2>&1');
     
-    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
-    if (!$isRunning) {
-        return ['success' => true, 'message' => 'Service stopped successfully'];
-    } else {
-        return ['success' => false, 'message' => 'Failed to stop service'];
+    // Give it time to stop and verify
+    for ($i = 0; $i < 5; $i++) {
+        sleep(1);
+        if (!isServiceRunning()) {
+            return ['success' => true, 'message' => 'Service stopped successfully'];
+        }
     }
+    
+    return ['success' => false, 'message' => 'Failed to stop service: ' . trim($output)];
 }
 ?>
 ]]>
