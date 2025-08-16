@@ -130,7 +130,7 @@ rm -f nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
 <FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.page">
 <INLINE>
 <![CDATA[
-Menu="Settings/nvidia_gpu_exporter"
+Menu="UserUtilities"
 Title="NVIDIA GPU Exporter"
 Icon="nvidia_exporter.png"
 ---
@@ -146,15 +146,7 @@ $config_exists = file_exists($cfg_file);
 $config_readable = $config_exists && is_readable($cfg_file);
 
 // Service status
-$isRunning = false;
-$pid_check = trim(shell_exec("pgrep -f nvidia_gpu_exporter"));
-if (!empty($pid_check)) {
-    $isRunning = true;
-} else {
-    // Alternative check using ps
-    $ps_check = trim(shell_exec("ps aux | grep nvidia_gpu_exporter | grep -v grep"));
-    $isRunning = !empty($ps_check);
-}
+$isRunning = trim(shell_exec("pgrep nvidia_gpu_exporter")) ? true : false;
 $port = $cfg['settings']['PORT'] ?? $cfg['PORT'] ?? '9835';
 $bind_address = $cfg['settings']['BIND_ADDRESS'] ?? $cfg['BIND_ADDRESS'] ?? '0.0.0.0';
 $autostart = $cfg['settings']['AUTOSTART'] ?? $cfg['AUTOSTART'] ?? 'yes';
@@ -235,7 +227,7 @@ Metrics URL:
 <?endif;?>
 
 Debug Info:
-: Config file exists: <?=$config_exists ? 'Yes' : 'No'?> | Config readable: <?=$config_readable ? 'Yes' : 'No'?> | Binary exists: <?=file_exists('/usr/local/bin/nvidia_gpu_exporter') ? 'Yes' : 'No'?> | PID: <?=trim(shell_exec("pgrep -f nvidia_gpu_exporter")) ?: 'None'?>
+: Config file exists: <?=$config_exists ? 'Yes' : 'No'?> | Config readable: <?=$config_readable ? 'Yes' : 'No'?> | Binary exists: <?=file_exists('/usr/local/bin/nvidia_gpu_exporter') ? 'Yes' : 'No'?>
 
 </form>
 
@@ -299,22 +291,13 @@ echo json_encode($response);
 function startService() {
     $output = shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/start 2>&1');
     sleep(2);
-    // Better process detection
-    $pid_check = trim(shell_exec("pgrep -f nvidia_gpu_exporter"));
-    if (empty($pid_check)) {
-        $pid_check = trim(shell_exec("ps aux | grep nvidia_gpu_exporter | grep -v grep"));
-    }
-    return !empty($pid_check);
+    return trim(shell_exec('pgrep nvidia_gpu_exporter')) ? true : false;
 }
 
 function stopService() {
     shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/stop 2>&1');
     sleep(1);
-    $pid_check = trim(shell_exec("pgrep -f nvidia_gpu_exporter"));
-    if (!empty($pid_check)) {
-        $pid_check = trim(shell_exec("ps aux | grep nvidia_gpu_exporter | grep -v grep"));
-    }
-    return empty($pid_check);
+    return !trim(shell_exec('pgrep nvidia_gpu_exporter'));
 }
 ?>
 ]]>
@@ -388,7 +371,7 @@ PORT=${PORT:-9835}
 BIND_ADDRESS=${BIND_ADDRESS:-0.0.0.0}
 
 # Check if already running
-if pgrep -f nvidia_gpu_exporter > /dev/null 2>&1; then
+if pgrep nvidia_gpu_exporter > /dev/null; then
     echo "nvidia_gpu_exporter is already running"
     exit 1
 fi
@@ -413,8 +396,8 @@ fi
 #!/bin/bash
 # Stop nvidia_gpu_exporter service
 
-if pgrep -f nvidia_gpu_exporter > /dev/null 2>&1; then
-    pkill -f nvidia_gpu_exporter
+if pgrep nvidia_gpu_exporter > /dev/null; then
+    pkill nvidia_gpu_exporter
     echo "nvidia_gpu_exporter stopped"
 else
     echo "nvidia_gpu_exporter is not running"
