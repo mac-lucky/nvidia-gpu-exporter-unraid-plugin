@@ -1,0 +1,75 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "nvidia_gpu_exporter">
+  <!ENTITY author    "mac-lucky">
+  <!ENTITY version   "2025.08.16">
+  <!ENTITY gitURL    "https://raw.githubusercontent.com/&author;/nvidia-gpu-exporter-plugin/main">
+  <!ENTITY pluginURL "&gitURL;/&name;.plg">
+  <!ENTITY plugin    "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY packages  "/boot/config/plugins/&name;/packages">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="Settings/nvidia_gpu_exporter" pluginURL="&pluginURL;" min="6.9.0" support="https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
+
+<CHANGES>
+###2025.08.16
+- Initial release
+- Based on nvidia_gpu_exporter by utkuozdemir
+- Provides Prometheus metrics for NVIDIA GPUs
+- Simple start/stop/restart controls
+</CHANGES>
+
+<!-- The 'source' file. -->
+<FILE Name="/boot/config/plugins/&name;/&name;.txz" Run="upgradepkg --install-new">
+<URL>&gitURL;/packages/&name;.txz</URL>
+</FILE>
+
+<!-- The 'post-install' script -->
+<FILE Name="/tmp/&name;-install" Run="/bin/bash">
+<INLINE>
+# Create necessary directories
+mkdir -p /usr/local/emhttp/plugins/&name;
+mkdir -p /var/run/&name;
+mkdir -p /var/log/&name;
+
+# Set permissions
+chmod 755 /usr/local/emhttp/plugins/&name;
+chmod 755 /var/run/&name;
+chmod 755 /var/log/&name;
+
+# Make scripts executable
+chmod +x /usr/local/emhttp/plugins/&name;/include/*.sh
+
+# Remove installation script
+rm -f /tmp/&name;-install
+
+echo "NVIDIA GPU Exporter plugin installed successfully"
+</INLINE>
+</FILE>
+
+<!-- The 'remove' script. -->
+<FILE Name="/tmp/&name;-uninstall" Run="/bin/bash" Method="remove">
+<INLINE>
+# Stop service if running
+if pgrep nvidia_gpu_exporter >/dev/null 2>&1; then
+    pkill nvidia_gpu_exporter
+fi
+
+# Remove plugin files
+rm -rf /usr/local/emhttp/plugins/&name;
+rm -rf /var/run/&name;
+rm -rf /var/log/&name;
+rm -f /usr/local/bin/nvidia_gpu_exporter
+
+# Remove package
+removepkg &name;
+
+# Remove installation files
+rm -rf &plugin;
+
+echo "NVIDIA GPU Exporter plugin uninstalled"
+</INLINE>
+</FILE>
+
+</PLUGIN>
