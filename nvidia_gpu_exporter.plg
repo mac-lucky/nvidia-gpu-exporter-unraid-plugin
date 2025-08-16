@@ -15,40 +15,36 @@
 - Initial Release
 </CHANGES>
 
-<EXEC>
+<FILE Run="/bin/bash">
+<INLINE>
+exec &gt; >(tee &plugdir;/install.log)
+exec 2>&1
+
+echo "Starting installation of nvidia-gpu-exporter"
+
 mkdir -p &plugdir;
-</EXEC>
 
-<EXEC>
-wget -O /tmp/nvidia_gpu_exporter.tar.gz https://github.com/&github;/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_amd64.tar.gz
-</EXEC>
+if [ ! -f "&plugdir;/nvidia_gpu_exporter" ]; then
+    echo "nvidia_gpu_exporter not found, downloading..."
+    wget -O /tmp/nvidia_gpu_exporter.tar.gz https://github.com/&github;/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_amd64.tar.gz
+    tar -C &plugdir; -xvf /tmp/nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
+    rm /tmp/nvidia_gpu_exporter.tar.gz
+else
+    echo "nvidia_gpu_exporter already exists, skipping download."
+fi
 
-<EXEC>
-tar -C &plugdir; -xvf /tmp/nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
-</EXEC>
-
-<EXEC>
-mkdir -p &plugdir;/source/nvidia-gpu-exporter/images
-</EXEC>
-
-<EXEC>
-wget -O &plugdir;/source/nvidia-gpu-exporter/nvidia-gpu-exporter.page https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/source/nvidia-gpu-exporter/nvidia-gpu-exporter.page
-</EXEC>
-
-<EXEC>
-wget -O &plugdir;/source/nvidia-gpu-exporter/nvidia-gpu-exporter.php https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/source/nvidia-gpu-exporter/nvidia-gpu-exporter.php
-</EXEC>
-
-<EXEC>
-wget -O &plugdir;/source/nvidia-gpu-exporter/images/icon.png https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_exporter.png
-</EXEC>
-
-<EXEC>
 chmod +x &plugdir;/nvidia_gpu_exporter
-</EXEC>
 
-<EXEC>
-rm /tmp/nvidia_gpu_exporter.tar.gz
-</EXEC>
+echo "Creating plugin directories..."
+mkdir -p &plugdir;/source/nvidia-gpu-exporter/images
+
+echo "Downloading plugin UI files..."
+wget -q -O &plugdir;/source/nvidia-gpu-exporter/nvidia-gpu-exporter.page https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/source/nvidia-gpu-exporter/nvidia-gpu-exporter.page
+wget -q -O &plugdir;/source/nvidia-gpu-exporter/nvidia-gpu-exporter.php https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/source/nvidia-gpu-exporter/nvidia-gpu-exporter.php
+wget -q -O &plugdir;/source/nvidia-gpu-exporter/images/icon.png https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_exporter.png
+
+echo "Installation complete."
+</INLINE>
+</FILE>
 
 </PLUGIN>

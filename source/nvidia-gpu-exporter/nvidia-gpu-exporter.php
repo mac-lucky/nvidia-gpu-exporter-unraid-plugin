@@ -16,7 +16,7 @@ function isAutostartEnabled() {
 }
 
 if ($_POST['start']) {
-    shell_exec('/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia_gpu_exporter &');
+    shell_exec('/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia_gpu_exporter &> /var/log/nvidia-gpu-exporter.log &');
     header("Location: " . $_SERVER['REQUEST_URI']);
     exit;
 }
