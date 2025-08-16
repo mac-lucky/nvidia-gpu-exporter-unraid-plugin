@@ -2,390 +2,473 @@
 
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia_gpu_exporter">
-<!ENTITY author    "utkuozdemir">
+<!ENTITY author    "mac-lucky">
 <!ENTITY version   "1.3.2">
-<!ENTITY launch    "Settings/nvidia_gpu_exporter">
-<!ENTITY gitURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter">
-<!ENTITY pluginURL "https://raw.githubusercontent.com/&author;/&name;/master/unraid-plugin/&name;.plg">
+<!ENTITY md5       "18fda6e8b4f2efda39523bc75d1410f6">
+<!ENTITY launch    "Settings/NvidiaGpuExporter">
+<!ENTITY gitURL    "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main">
+<!ENTITY pluginURL "&gitURL;/nvidia_gpu_exporter.plg">
+<!ENTITY binURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz">
+<!ENTITY pkgNAME   "&name;-&version;">
+<!ENTITY bindir    "/usr/local/bin">
+<!ENTITY service   "nvidia-gpu-exporter">
 ]>
 
-<PLUGIN name="&name;"
-        author="&author;"
-        version="&version;"
-        launch="&launch;"
-        pluginURL="&pluginURL;"
-        min="6.9.0"
-        support="&gitURL;/issues">
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.11.0" support="https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
 
 <CHANGES>
-###&version;###
-- Unraid plugin release
-- Auto-discovery of nvidia-smi metric fields
-- Configurable web interface on port 9835
-- Systemd service management
-- Support for remote nvidia-smi execution
+
+###2025.08.16
+- Initial release of nvidia_gpu_exporter plugin for Unraid
+- Supports NVIDIA GPU monitoring via Prometheus metrics
+- Provides start/stop/restart controls with web interface
+- Automatic service management and autostart functionality
+- Uses latest nvidia_gpu_exporter v1.3.2
+- Includes comprehensive system status checking
+- Web interface shows GPU availability and count
+
 </CHANGES>
 
 <!--
-Copyright 2025, utkuozdemir
-NVIDIA GPU Exporter plugin for Unraid.
+NVIDIA GPU Exporter Plugin for Unraid
 
-Plugin file for NVIDIA GPU Exporter
+This plugin provides the nvidia_gpu_exporter service for monitoring NVIDIA GPUs on Unraid systems.
+The nvidia_gpu_exporter exports GPU metrics in Prometheus format, making it suitable for monitoring
+GPU performance, temperature, memory usage, power consumption, and other vital statistics.
+
+Features:
+- Easy installation and management via Unraid web interface
+- Configurable port and bind address
+- Automatic startup support
+- Start/Stop/Restart controls
+- Real-time status monitoring
+- GPU detection and validation
+- Metrics available at http://SERVER_IP:9835/metrics
+
+Requirements:
+- NVIDIA GPU(s) installed in the system
+- NVIDIA drivers properly installed
+- Unraid 6.11.0 or later
+
 Source: https://github.com/utkuozdemir/nvidia_gpu_exporter
+Plugin Repository: https://github.com/mac-lucky/nvidia-gpu-exporter-plugin
 -->
 
+<!-- INSTALL SCRIPT -->
+<FILE Run="/usr/bin/php">
+<INLINE>
+<![CDATA[
+<?php
+  $version = "&version;";
+  $docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+  $translations = file_exists("$docroot/webGui/include/Translations.php");
+  if ($translations) {
+    $_SERVER['REQUEST_URI'] = 'nvidia_gpu_exporter';
+    require_once "$docroot/webGui/include/Translations.php";
+  } else {
+    function _($text) { return $text; }
+  }
+  $nvidia_gpu_exporter_cfg = parse_ini_file('/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg', true);
+  $nvidia_gpu_exporter_installed = file_exists('/var/log/plugins/nvidia_gpu_exporter') ? parse_ini_file('/var/log/plugins/nvidia_gpu_exporter', true) : [];
+  if (version_compare($nvidia_gpu_exporter_installed['PACKAGE'], $version, '>=')) {
+    echo "Latest nvidia_gpu_exporter already installed. Exiting...\n";
+    exit(0);
+  }
+?>
+]]>
+</INLINE>
+</FILE>
+
+<!-- PRE-INSTALL SCRIPT -->
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-# Remove old plugin files
-rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.txz 2>/dev/null|head -n1)
-rm -f $(ls /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter*.tgz 2>/dev/null|head -n1)
+# Create plugin directory structure
+mkdir -p /boot/config/plugins/nvidia_gpu_exporter
+mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter/images
+mkdir -p /var/log/plugins
+
+# Stop any existing service
+if pgrep nvidia_gpu_exporter > /dev/null; then
+  echo "Stopping existing nvidia_gpu_exporter service..."
+  pkill nvidia_gpu_exporter
+fi
+
+# Remove old binary if it exists
+rm -f /usr/local/bin/nvidia_gpu_exporter
 ]]>
 </INLINE>
 </FILE>
 
-<!--
-Download the binary package
--->
-<FILE Name="/boot/config/plugins/&name;/&name;-&version;-linux-amd64.tar.gz">
-<URL>https://github.com/&author;/&name;/releases/download/v&version;1.3.2&name;_&version;_linux_x86_64.tar.gz</URL>
-<MD5>18fda6e8b4f2efda39523bc75d1410f6</MD5>
+<!-- BINARY DOWNLOAD AND INSTALL -->
+<FILE Name="/tmp/nvidia_gpu_exporter.tar.gz" Run="upgradepkg --install-new">
+<URL>&binURL;</URL>
+<MD5>&md5;</MD5>
 </FILE>
 
-<!--
-The 'plugin' config file
--->
-<FILE Name="/boot/config/plugins/&name;/&name;.cfg">
-<INLINE>
-SERVICE="enable"
-PORT="9835"
-NVIDIASMI="/usr/bin/nvidia-smi"
-QUERYFIELDS="AUTO"
-LOGFILE="/var/log/nvidia_gpu_exporter.log"
-</INLINE>
-</FILE>
-
-<!--
-Service file for controlling the daemon
--->
-<FILE Name="/etc/rc.d/rc.&name;" Mode="0755">
+<!-- EXTRACT BINARY -->
+<FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-#!/bin/bash
-# Start/stop/restart nvidia_gpu_exporter
-
-. /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg
-
-case "$1" in
-  'start')
-    if [ "$SERVICE" == "enable" ]; then
-      echo "Starting NVIDIA GPU Exporter..."
-      # Check if nvidia-smi is available
-      if ! command -v nvidia-smi &> /dev/null && [ "$NVIDIASMI" == "/usr/bin/nvidia-smi" ]; then
-        echo "nvidia-smi not found. Please install NVIDIA drivers first."
-        exit 1
-      fi
-      
-      # Start the exporter
-      /usr/local/bin/nvidia_gpu_exporter \
-        --web.listen-address=":$PORT" \
-        --nvidia-smi-command="$NVIDIASMI" \
-        --query-field-names="$QUERYFIELDS" \
-        >> "$LOGFILE" 2>&1 &
-      
-      echo $! > /var/run/nvidia_gpu_exporter.pid
-      echo "NVIDIA GPU Exporter started on port $PORT"
-    fi
-    ;;
-  'stop')
-    echo "Stopping NVIDIA GPU Exporter..."
-    if [ -f /var/run/nvidia_gpu_exporter.pid ]; then
-      kill $(cat /var/run/nvidia_gpu_exporter.pid) 2>/dev/null
-      rm -f /var/run/nvidia_gpu_exporter.pid
-    fi
-    killall nvidia_gpu_exporter 2>/dev/null
-    echo "NVIDIA GPU Exporter stopped"
-    ;;
-  'restart')
-    $0 stop
-    sleep 1
-    $0 start
-    ;;
-  *)
-    echo "Usage: $0 {start|stop|restart}"
-    exit 1
-esac
+cd /tmp
+tar -xzf nvidia_gpu_exporter.tar.gz
+cp nvidia_gpu_exporter /usr/local/bin/
+chmod +x /usr/local/bin/nvidia_gpu_exporter
+rm -f nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
 ]]>
 </INLINE>
 </FILE>
 
-<!--
-Install metrics proxy script
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/scripts/get_metrics.php">
-<INLINE>
-<![CDATA[
-<?php
-// Read configuration
-$cfg = parse_ini_file("/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg");
-
-if (!$cfg || !isset($cfg['PORT'])) {
-    http_response_code(500);
-    echo "Unable to read configuration";
-    exit;
-}
-
-$port = $cfg['PORT'];
-$url = "http://127.0.0.1:$port/metrics";
-
-// Use curl to fetch metrics
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, $url);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
-
-$output = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$error = curl_error($ch);
-curl_close($ch);
-
-if ($output === false || $httpCode !== 200) {
-    http_response_code(500);
-    echo "Unable to fetch metrics from $url";
-    if ($error) {
-        echo " (Error: $error)";
-    }
-    exit;
-}
-
-// Return the metrics
-header('Content-Type: text/plain');
-echo $output;
-?>
-]]>
-</INLINE>
+<!-- PLUGIN ICON -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/images/nvidia_exporter.png">
+<URL>&gitURL;/nvidia_exporter.png</URL>
 </FILE>
 
-<!--
-Install service control script
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/scripts/service_control.php">
-<INLINE>
-<![CDATA[
-<?php
-if ($_POST['action']) {
-    $action = $_POST['action'];
-    
-    // Validate action
-    if (!in_array($action, ['start', 'stop', 'restart'])) {
-        http_response_code(400);
-        echo "Invalid action";
-        exit;
-    }
-    
-    // Execute the service command
-    $command = "/etc/rc.d/rc.nvidia_gpu_exporter " . escapeshellarg($action);
-    $output = shell_exec($command . " 2>&1");
-    
-    // Return the output
-    echo $output;
-} else {
-    http_response_code(400);
-    echo "No action specified";
-}
-?>
-]]>
-</INLINE>
-</FILE>
-
-<!--
-Install web interface page
--->
-<FILE Name="/usr/local/emhttp/plugins/&name;/&name;.page">
+<!-- PLUGIN WEB INTERFACE -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/NvidiaGpuExporter.page">
 <INLINE>
 <![CDATA[
 Menu="NetworkServices"
 Title="NVIDIA GPU Exporter"
-Icon="graph"
+Icon="nvidia_exporter.png"
 ---
-<?php
+<?PHP
 $plugin = "nvidia_gpu_exporter";
+$service = "nvidia-gpu-exporter";
 $cfg = parse_ini_file("/boot/config/plugins/$plugin/$plugin.cfg");
+$var = parse_ini_file("/var/local/emhttp/var.ini");
 
-// Set defaults if config file doesn't exist or values are missing
-if (!$cfg) {
-    $cfg = array();
+// Service status
+$isRunning = trim(shell_exec("pgrep nvidia_gpu_exporter")) ? true : false;
+$port = $cfg['PORT'] ?: '9835';
+$bind_address = $cfg['BIND_ADDRESS'] ?: '0.0.0.0';
+$autostart = $cfg['AUTOSTART'] ?: 'yes';
+$web_listen_address = $bind_address . ':' . $port;
+
+// Check if nvidia-smi is available
+$nvidiaSmi = trim(shell_exec("which nvidia-smi 2>/dev/null"));
+$nvidiaAvailable = !empty($nvidiaSmi) && is_executable($nvidiaSmi);
+$gpuCount = 0;
+if ($nvidiaAvailable) {
+    $gpuCount = intval(trim(shell_exec("nvidia-smi --list-gpus 2>/dev/null | wc -l")));
 }
-$cfg['SERVICE'] = isset($cfg['SERVICE']) ? $cfg['SERVICE'] : 'enable';
-$cfg['PORT'] = isset($cfg['PORT']) ? $cfg['PORT'] : '9835';
-$cfg['NVIDIASMI'] = isset($cfg['NVIDIASMI']) ? $cfg['NVIDIASMI'] : '/usr/bin/nvidia-smi';
-$cfg['QUERYFIELDS'] = isset($cfg['QUERYFIELDS']) ? $cfg['QUERYFIELDS'] : 'AUTO';
-$cfg['USER_OPTS'] = isset($cfg['USER_OPTS']) ? $cfg['USER_OPTS'] : '';
-
-$service_running = trim(shell_exec("ps aux | grep '[n]vidia_gpu_exporter' | wc -l")) > 0;
-$pid_file = "/var/run/nvidia_gpu_exporter.pid";
-$service_pid = file_exists($pid_file) ? trim(file_get_contents($pid_file)) : "";
 ?>
 
-<form markdown="1" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="/boot/config/plugins/<?=$plugin?>/<?=$plugin?>.cfg">
+<script>
+$(function() {
+  // Service control functions
+  function serviceControl(action) {
+    $('#wait_' + action).show();
+    $.post('/plugins/nvidia_gpu_exporter/include/service.php', {action: action}, function(data) {
+      $('#wait_' + action).hide();
+      if (data.success) {
+        setTimeout(function() { location.reload(); }, 1000);
+      } else {
+        alert('Error: ' + data.message);
+      }
+    }, 'json');
+  }
+  
+  $('#btnStart').click(function() { serviceControl('start'); });
+  $('#btnStop').click(function() { serviceControl('stop'); });
+  $('#btnRestart').click(function() { serviceControl('restart'); });
+  
+  // Apply settings
+  $('#btnApply').click(function() {
+    $('#wait_apply').show();
+    $.post('/plugins/nvidia_gpu_exporter/include/update.php', $('#settings_form').serialize(), function(data) {
+      $('#wait_apply').hide();
+      if (data.success) {
+        location.reload();
+      } else {
+        alert('Error: ' + data.message);
+      }
+    }, 'json');
+  });
+});
+</script>
 
-Service Status:
-: <span class="<?=($service_running ? 'green-text' : 'red-text')?>"><?=($service_running ? 'Running' : 'Stopped')?></span>
-  <?php if($service_running && $service_pid): ?>
-  (PID: <?=$service_pid?>)
-  <?php endif; ?>
+<form id="settings_form" markdown="1">
+Service status:
+: <span class="<?=$isRunning ? 'green-text' : 'red-text'?>"><?=$isRunning ? 'RUNNING' : 'STOPPED'?></span>
 
-Enable Service:
-: <select name="SERVICE" size="1">
-  <?=mk_option($cfg['SERVICE'], "disable", "No");?>
-  <?=mk_option($cfg['SERVICE'], "enable", "Yes");?>
-  </select>
+NVIDIA Status:
+: <span class="<?=$nvidiaAvailable ? 'green-text' : 'red-text'?>"><?=$nvidiaAvailable ? "Available ({$gpuCount} GPU" . ($gpuCount != 1 ? 's' : '') . ")" : 'Not Available'?></span>
 
 Port:
-: <input type="number" name="PORT" min="1024" max="65535" value="<?=htmlspecialchars($cfg['PORT'])?>" class="narrow">
-  <blockquote class="inline_help">
-  <p>Port for the metrics endpoint (default: 9835)</p>
-  </blockquote>
+: <input type="number" name="PORT" value="<?=$port?>" min="1" max="65535" style="width:80px">
 
-NVIDIA SMI Path:
-: <input type="text" name="NVIDIASMI" value="<?=htmlspecialchars($cfg['NVIDIASMI'])?>" class="wide">
-  <blockquote class="inline_help">
-  <p>Path to nvidia-smi binary (default: /usr/bin/nvidia-smi)</p>
-  </blockquote>
+Bind Address:
+: <input type="text" name="BIND_ADDRESS" value="<?=$bind_address?>" placeholder="0.0.0.0" style="width:120px">
 
-Query Fields:
-: <select name="QUERYFIELDS" size="1">
-  <?=mk_option($cfg['QUERYFIELDS'], "AUTO", "Auto-detect");?>
-  <?=mk_option($cfg['QUERYFIELDS'], "uuid,name,temperature.gpu,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used", "Basic");?>
-  <?=mk_option($cfg['QUERYFIELDS'], "uuid,name,temperature.gpu,fan.speed,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used,clocks.current.graphics,clocks.current.memory,power.draw", "Extended");?>
+Autostart:
+: <select name="AUTOSTART" style="width:80px">
+  <option value="yes" <?=$autostart == 'yes' ? 'selected' : ''?>>Yes</option>
+  <option value="no" <?=$autostart == 'no' ? 'selected' : ''?>>No</option>
   </select>
-  <blockquote class="inline_help">
-  <p>Fields to query from nvidia-smi. AUTO will auto-detect available fields.</p>
-  </blockquote>
-
-Additional Options:
-: <input type="text" name="USER_OPTS" value="<?=htmlspecialchars($cfg['USER_OPTS'])?>" class="wide">
-  <blockquote class="inline_help">
-  <p>Additional command line options</p>
-  </blockquote>
 
 &nbsp;
-: <input type="submit" value="Apply"><input type="button" value="Done" onclick="done()">
+: <input type="button" id="btnApply" value="Apply"><span id="wait_apply" class="status vhidden">Please wait...</span>
+
+&nbsp;
+: <input type="button" id="btnStart" value="Start" <?=$isRunning ? 'disabled' : ''?>><span id="wait_start" class="status vhidden">Please wait...</span>
+  <input type="button" id="btnStop" value="Stop" <?=$isRunning ? '' : 'disabled'?>><span id="wait_stop" class="status vhidden">Please wait...</span>
+  <input type="button" id="btnRestart" value="Restart" <?=$isRunning ? '' : 'disabled'?>><span id="wait_restart" class="status vhidden">Please wait...</span>
+
+<?if ($isRunning):?>
+Metrics URL:
+: <a href="http://<?=$var['NAME']?>:<?=$port?>/metrics" target="_blank">http://<?=$var['NAME']?>:<?=$port?>/metrics</a>
+<?endif;?>
+
 </form>
 
-<script>
-function done(){
-  parent.parent.Shadowbox.close();
-}
-</script>
-
-## Service Control
-
-**Status:** <span id="service-status"><?=($service_running ? 'Running' : 'Stopped')?></span>
-
-<input type="button" value="Start" onclick="serviceControl('start')" <?=($service_running ? 'disabled' : '')?>>
-<input type="button" value="Stop" onclick="serviceControl('stop')" <?=(!$service_running ? 'disabled' : '')?>>
-<input type="button" value="Restart" onclick="serviceControl('restart')">
-
-<?php if($service_running): ?>
-## Metrics Preview
-<?php 
-$hostname = $_SERVER['HTTP_HOST'] ?: $_SERVER['SERVER_NAME'] ?: 'localhost';
-$metrics_url = "http://$hostname:{$cfg['PORT']}/metrics";
-?>
-Access the metrics at: <a href="<?=$metrics_url?>" target="_blank"><?=$metrics_url?></a>
-
-<pre id="metrics-preview" style="height: 200px; overflow-y: scroll; background: #f5f5f5; padding: 10px; color: #333; font-family: monospace; font-size: 12px;">
-Loading metrics...
-</pre>
-<?php endif; ?>
-
-<script>
-function serviceControl(action) {
-  // Disable all buttons during operation
-  $('input[type="button"]').prop('disabled', true);
-  $('#service-status').text('Processing...');
-  
-  $.post('/plugins/nvidia_gpu_exporter/scripts/service_control.php', {action: action})
-    .done(function(data) {
-      console.log('Service ' + action + ' output:', data);
-      setTimeout(function() {
-        location.reload();
-      }, 2000);
-    })
-    .fail(function(xhr, status, error) {
-      console.error('Service control failed:', error);
-      alert('Failed to ' + action + ' service: ' + error);
-      // Re-enable buttons on failure
-      setTimeout(function() {
-        location.reload();
-      }, 1000);
-    });
-}
-
-<?php if($service_running): ?>
-// Load metrics preview using server-side proxy
-$.get('/plugins/nvidia_gpu_exporter/scripts/get_metrics.php')
-  .done(function(data) {
-    $('#metrics-preview').text(data.substring(0, 2000) + (data.length > 2000 ? '\n... (truncated)' : ''));
-  })
-  .fail(function(xhr, status, error) {
-    $('#metrics-preview').text('Unable to fetch metrics. Service may not be running or port may be incorrect.');
-    console.error('Metrics fetch failed:', status, error);
-  });
-<?php endif; ?>
-</script>
+<blockquote class="inline_help">
+<p><b>NVIDIA GPU Exporter</b></p>
+<p>This plugin provides GPU monitoring metrics for NVIDIA GPUs using the nvidia_gpu_exporter service.</p>
+<p>The service exposes metrics at <code>/metrics</code> endpoint which can be scraped by Prometheus or other monitoring systems.</p>
+<p><b>Default Port:</b> 9835</p>
+<p><b>Requirements:</b></p>
+<ul>
+<li>NVIDIA GPU(s) installed</li>
+<li>NVIDIA drivers installed</li>
+<li>nvidia-ml-py available (usually included with Unraid NVIDIA plugin)</li>
+</ul>
+<p><b>Available Metrics:</b></p>
+<ul>
+<li>GPU temperature, fan speed, power usage</li>
+<li>Memory usage (used/free/total)</li>
+<li>GPU utilization percentage</li>
+<li>Driver version and CUDA version</li>
+<li>Performance state and throttle reasons</li>
+</ul>
+<p><b>Version:</b> &version;</p>
+</blockquote>
 ]]>
 </INLINE>
 </FILE>
 
-<!--
-Install binary to system location
--->
+<!-- SERVICE CONTROL SCRIPT -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/service.php">
+<INLINE>
+<![CDATA[
+<?php
+require_once '/usr/local/emhttp/webGui/include/Helpers.php';
+
+$action = $_POST['action'] ?? '';
+$response = ['success' => false, 'message' => ''];
+
+switch ($action) {
+    case 'start':
+        $result = startService();
+        break;
+    case 'stop':
+        $result = stopService();
+        break;
+    case 'restart':
+        stopService();
+        sleep(2);
+        $result = startService();
+        break;
+    default:
+        $response['message'] = 'Invalid action';
+        echo json_encode($response);
+        exit;
+}
+
+$response['success'] = $result;
+$response['message'] = $result ? 'Success' : 'Failed to ' . $action . ' service';
+echo json_encode($response);
+
+function startService() {
+    $output = shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/start 2>&1');
+    sleep(2);
+    return trim(shell_exec('pgrep nvidia_gpu_exporter')) ? true : false;
+}
+
+function stopService() {
+    shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/stop 2>&1');
+    sleep(1);
+    return !trim(shell_exec('pgrep nvidia_gpu_exporter'));
+}
+?>
+]]>
+</INLINE>
+</FILE>
+
+<!-- SETTINGS UPDATE SCRIPT -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/update.php">
+<INLINE>
+<![CDATA[
+<?php
+$cfg_file = '/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg';
+$port = intval($_POST['PORT'] ?? 9835);
+$bind_address = $_POST['BIND_ADDRESS'] ?? '0.0.0.0';
+$autostart = $_POST['AUTOSTART'] ?? 'yes';
+
+// Validate port
+if ($port < 1 || $port > 65535) {
+    echo json_encode(['success' => false, 'message' => 'Invalid port number']);
+    exit;
+}
+
+// Validate bind address (basic validation)
+if (!filter_var($bind_address, FILTER_VALIDATE_IP) && $bind_address !== '0.0.0.0') {
+    echo json_encode(['success' => false, 'message' => 'Invalid bind address']);
+    exit;
+}
+
+$cfg_content = "[settings]\n";
+$cfg_content .= "PORT=\"{$port}\"\n";
+$cfg_content .= "BIND_ADDRESS=\"{$bind_address}\"\n";
+$cfg_content .= "AUTOSTART=\"{$autostart}\"\n";
+
+if (file_put_contents($cfg_file, $cfg_content)) {
+    echo json_encode(['success' => true, 'message' => 'Settings saved']);
+} else {
+    echo json_encode(['success' => false, 'message' => 'Failed to save settings']);
+}
+?>
+]]>
+</INLINE>
+</FILE>
+
+<!-- DEFAULT CONFIGURATION -->
+<FILE Name="/boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg">
+<INLINE>
+<![CDATA[
+[settings]
+PORT="9835"
+BIND_ADDRESS="0.0.0.0"
+AUTOSTART="yes"
+]]>
+</INLINE>
+</FILE>
+
+<!-- AUTOSTART SCRIPT -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/start">
+<INLINE>
+<![CDATA[
+#!/bin/bash
+# Start nvidia_gpu_exporter service
+
+source /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg 2>/dev/null
+
+PORT=${PORT:-9835}
+BIND_ADDRESS=${BIND_ADDRESS:-0.0.0.0}
+
+# Check if already running
+if pgrep nvidia_gpu_exporter > /dev/null; then
+    echo "nvidia_gpu_exporter is already running"
+    exit 1
+fi
+
+# Start the service
+/usr/local/bin/nvidia_gpu_exporter --web.listen-address="${BIND_ADDRESS}:${PORT}" > /var/log/nvidia_gpu_exporter.log 2>&1 &
+
+if [ $? -eq 0 ]; then
+    echo "nvidia_gpu_exporter started successfully"
+else
+    echo "Failed to start nvidia_gpu_exporter"
+    exit 1
+fi
+]]>
+</INLINE>
+</FILE>
+
+<!-- STOP SCRIPT -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/stop">
+<INLINE>
+<![CDATA[
+#!/bin/bash
+# Stop nvidia_gpu_exporter service
+
+if pgrep nvidia_gpu_exporter > /dev/null; then
+    pkill nvidia_gpu_exporter
+    echo "nvidia_gpu_exporter stopped"
+else
+    echo "nvidia_gpu_exporter is not running"
+fi
+]]>
+</INLINE>
+</FILE>
+
+<!-- RC SCRIPT FOR AUTOSTART -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/rc.nvidia_gpu_exporter">
+<INLINE>
+<![CDATA[
+#!/bin/bash
+# Auto-start script for nvidia_gpu_exporter
+
+source /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.cfg 2>/dev/null
+
+if [ "$AUTOSTART" = "yes" ]; then
+    # Wait for system to be ready
+    sleep 10
+    
+    # Check if nvidia-smi is available
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        /usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/start
+    else
+        echo "nvidia-smi not found, skipping nvidia_gpu_exporter autostart"
+    fi
+fi
+]]>
+</INLINE>
+</FILE>
+
+<!-- POST-INSTALL SCRIPT -->
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-# Extract and install the binary
-cd /tmp
-tar -xzf /boot/config/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter-&version;-linux-amd64.tar.gz
-cp nvidia_gpu_exporter /usr/local/bin/
-chmod +x /usr/local/bin/nvidia_gpu_exporter
+# Create installation log
+echo "[PACKAGE]" > /var/log/plugins/nvidia_gpu_exporter
+echo "PACKAGE=\"&version;\"" >> /var/log/plugins/nvidia_gpu_exporter
 
-# Create log directory
-mkdir -p /var/log
+# Set permissions
+chmod 755 /usr/local/bin/nvidia_gpu_exporter
+chmod 755 /usr/local/emhttp/plugins/nvidia_gpu_exporter/include/*.php
+chmod 755 /usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/*
 
-# Create web interface directory
-mkdir -p /usr/local/emhttp/plugins/nvidia_gpu_exporter
+# Setup autostart by adding to go script
+if ! grep -q "nvidia_gpu_exporter" /boot/config/go 2>/dev/null; then
+    echo "" >> /boot/config/go
+    echo "# Start nvidia_gpu_exporter if enabled" >> /boot/config/go
+    echo "/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/rc.nvidia_gpu_exporter &" >> /boot/config/go
+fi
 
-# Clean up
-rm -f /tmp/nvidia_gpu_exporter
-
-# Start the service if enabled
-/etc/rc.d/rc.nvidia_gpu_exporter start
+echo "nvidia_gpu_exporter plugin installed successfully!"
+echo "Access the plugin via Settings -> NVIDIA GPU Exporter"
 ]]>
 </INLINE>
 </FILE>
 
-<!--
-The 'remove' script
--->
+<!-- UNINSTALL SCRIPT -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
 <![CDATA[
-# Stop and disable service
-/etc/rc.d/rc.nvidia_gpu_exporter stop
+# Stop service if running
+pkill nvidia_gpu_exporter 2>/dev/null
 
-# Remove installed files
+# Remove binary
 rm -f /usr/local/bin/nvidia_gpu_exporter
-rm -f /etc/rc.d/rc.nvidia_gpu_exporter
-rm -rf /boot/config/plugins/nvidia_gpu_exporter
 
-# Remove web interface files (if any)
+# Remove plugin files
 rm -rf /usr/local/emhttp/plugins/nvidia_gpu_exporter
 
-echo "NVIDIA GPU Exporter plugin removed successfully"
+# Remove autostart from go script
+if [ -f /boot/config/go ]; then
+    sed -i '/# Start nvidia_gpu_exporter if enabled/d' /boot/config/go
+    sed -i '/nvidia_gpu_exporter/d' /boot/config/go
+fi
+
+# Remove configuration (commented out to preserve user settings)
+# rm -rf /boot/config/plugins/nvidia_gpu_exporter
+
+# Remove log
+rm -f /var/log/plugins/nvidia_gpu_exporter
+rm -f /var/log/nvidia_gpu_exporter.log
+
+echo "nvidia_gpu_exporter plugin uninstalled"
 ]]>
 </INLINE>
 </FILE>
