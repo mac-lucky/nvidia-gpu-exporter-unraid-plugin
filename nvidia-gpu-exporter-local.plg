@@ -27,7 +27,7 @@ NVIDIA GPU Exporter for Prometheus monitoring. Exposes NVIDIA GPU metrics includ
 <FILE Run="/bin/bash">
 <INLINE>
 # Remove old 'source' files
-rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null)
+rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2&gt;/dev/null)
 </INLINE>
 </FILE>
 
@@ -51,7 +51,7 @@ DAEMON_ARGS="--web.listen-address=:9835"
 start_nvidia_gpu_exporter() {
     if [ -f $PIDFILE ]; then
         PID=$(cat $PIDFILE)
-        if kill -0 $PID > /dev/null 2>&1; then
+        if kill -0 $PID &gt; /dev/null 2&gt;&amp;1; then
             echo "nvidia-gpu-exporter is already running (PID: $PID)"
             return 1
         else
@@ -60,19 +60,19 @@ start_nvidia_gpu_exporter() {
     fi
     
     echo "Starting nvidia-gpu-exporter..."
-    nohup $DAEMON_PATH $DAEMON_ARGS > /var/log/nvidia-gpu-exporter.log 2>&1 &
-    echo $! > $PIDFILE
+    nohup $DAEMON_PATH $DAEMON_ARGS &gt; /var/log/nvidia-gpu-exporter.log 2&gt;&amp;1 &amp;
+    echo $! &gt; $PIDFILE
     echo "nvidia-gpu-exporter started (PID: $(cat $PIDFILE))"
 }
 
 stop_nvidia_gpu_exporter() {
     if [ -f $PIDFILE ]; then
         PID=$(cat $PIDFILE)
-        if kill -0 $PID > /dev/null 2>&1; then
+        if kill -0 $PID &gt; /dev/null 2&gt;&amp;1; then
             echo "Stopping nvidia-gpu-exporter (PID: $PID)..."
             kill $PID
             sleep 2
-            if kill -0 $PID > /dev/null 2>&1; then
+            if kill -0 $PID &gt; /dev/null 2&gt;&amp;1; then
                 echo "Force killing nvidia-gpu-exporter..."
                 kill -9 $PID
             fi
@@ -90,7 +90,7 @@ stop_nvidia_gpu_exporter() {
 status_nvidia_gpu_exporter() {
     if [ -f $PIDFILE ]; then
         PID=$(cat $PIDFILE)
-        if kill -0 $PID > /dev/null 2>&1; then
+        if kill -0 $PID &gt; /dev/null 2&gt;&amp;1; then
             echo "nvidia-gpu-exporter is running (PID: $PID)"
             return 0
         else
@@ -331,7 +331,7 @@ if ($_POST['action']) {
     }
     
     // Execute the control script
-    $output = shell_exec("/etc/rc.d/rc.nvidia-gpu-exporter $action 2>&1");
+    $output = shell_exec("/etc/rc.d/rc.nvidia-gpu-exporter $action 2&gt;&amp;1");
     echo $output;
 }
 ?>
@@ -367,7 +367,7 @@ echo ""
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
 # Stop the service
-/etc/rc.d/rc.nvidia-gpu-exporter stop 2>/dev/null
+/etc/rc.d/rc.nvidia-gpu-exporter stop 2&gt;/dev/null
 
 # Remove symlink
 rm -f /usr/local/bin/nvidia_gpu_exporter
