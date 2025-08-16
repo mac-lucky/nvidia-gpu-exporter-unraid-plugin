@@ -31,24 +31,6 @@
 <!-- The 'post-install' script -->
 <FILE Name="/tmp/&name;-install" Run="/bin/bash">
 <INLINE>
-# Create necessary directories
-mkdir -p /usr/local/emhttp/plugins/&name;
-mkdir -p /var/run/&name;
-mkdir -p /var/log/&name;
-
-# Set permissions
-chmod 755 /usr/local/emhttp/plugins/&name;
-chmod 755 /var/run/&name;
-chmod 755 /var/log/&name;
-
-# Make scripts executable if they exist
-if [ -d "/usr/local/emhttp/plugins/&name;/include" ]; then
-  chmod +x /usr/local/emhttp/plugins/&name;/include/*.sh 2>/dev/null || true
-fi
-
-# Remove installation script
-rm -f /tmp/&name;-install
-
 echo "NVIDIA GPU Exporter plugin installed successfully"
 </INLINE>
 </FILE>
@@ -56,23 +38,6 @@ echo "NVIDIA GPU Exporter plugin installed successfully"
 <!-- The 'remove' script. -->
 <FILE Name="/tmp/&name;-uninstall" Run="/bin/bash" Method="remove">
 <INLINE>
-# Stop service if running
-if pgrep nvidia_gpu_exporter >/dev/null 2>&amp;1; then
-    pkill nvidia_gpu_exporter
-fi
-
-# Remove plugin files
-rm -rf /usr/local/emhttp/plugins/&name;
-rm -rf /var/run/&name;
-rm -rf /var/log/&name;
-rm -f /usr/local/bin/nvidia_gpu_exporter
-
-# Remove package
-removepkg &name; 2>/dev/null || true
-
-# Remove installation files
-rm -rf &plugin;
-
 echo "NVIDIA GPU Exporter plugin uninstalled"
 </INLINE>
 </FILE>
