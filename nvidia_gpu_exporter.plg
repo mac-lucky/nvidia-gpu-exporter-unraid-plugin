@@ -18,6 +18,13 @@
 
 <CHANGES>
 
+###2025.08.16a
+- Fixed service start error message appearing when service actually starts successfully
+- Improved service control logic to properly handle cases where service is already running
+- Enhanced error handling and user feedback in web interface
+- Added better logging and debugging information in start script
+- Improved JavaScript error handling and user experience
+
 ###2025.08.16
 - Initial release of nvidia_gpu_exporter plugin for Unraid
 - Supports NVIDIA GPU monitoring via Prometheus metrics
@@ -159,14 +166,29 @@ $(function() {
   // Service control functions
   function serviceControl(action) {
     $('#wait_' + action).show();
+    $('#btn' + action.charAt(0).toUpperCase() + action.slice(1)).prop('disabled', true);
+    
     $.post('/plugins/nvidia_gpu_exporter/include/service.php', {action: action}, function(data) {
       $('#wait_' + action).hide();
+      $('#btn' + action.charAt(0).toUpperCase() + action.slice(1)).prop('disabled', false);
+      
       if (data.success) {
-        setTimeout(function() { location.reload(); }, 1000);
+        // Show success message briefly
+        if (data.message && data.message !== 'Success') {
+          setTimeout(function() {
+            $('#wait_' + action).text(data.message).show();
+            setTimeout(function() { $('#wait_' + action).hide().text('Please wait...'); }, 2000);
+          }, 100);
+        }
+        setTimeout(function() { location.reload(); }, 1500);
       } else {
-        alert('Error: ' + data.message);
+        alert('Error: ' + (data.message || 'Unknown error'));
       }
-    }, 'json');
+    }, 'json').fail(function() {
+      $('#wait_' + action).hide();
+      $('#btn' + action.charAt(0).toUpperCase() + action.slice(1)).prop('disabled', false);
+      alert('Error: Failed to communicate with server');
+    });
   }
   
   $('#btnStart').click(function() { serviceControl('start'); });
@@ -176,14 +198,22 @@ $(function() {
   // Apply settings
   $('#btnApply').click(function() {
     $('#wait_apply').show();
+    $('#btnApply').prop('disabled', true);
+    
     $.post('/plugins/nvidia_gpu_exporter/include/update.php', $('#settings_form').serialize(), function(data) {
       $('#wait_apply').hide();
+      $('#btnApply').prop('disabled', false);
+      
       if (data.success) {
-        location.reload();
+        setTimeout(function() { location.reload(); }, 1000);
       } else {
-        alert('Error: ' + data.message);
+        alert('Error: ' + (data.message || 'Unknown error'));
       }
-    }, 'json');
+    }, 'json').fail(function() {
+      $('#wait_apply').hide();
+      $('#btnApply').prop('disabled', false);
+      alert('Error: Failed to save settings');
+    });
   });
 });
 </script>
@@ -275,20 +305,43 @@ switch ($action) {
         exit;
 }
 
-$response['success'] = $result;
-$response['message'] = $result ? 'Success' : 'Failed to ' . $action . ' service';
+$response['success'] = $result['success'];
+$response['message'] = $result['message'];
 echo json_encode($response);
 
 function startService() {
+    // Check if already running before attempting to start
+    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
+    if ($isRunning) {
+        return ['success' => true, 'message' => 'Service is already running'];
+    }
+    
     $output = shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/start 2>&1');
-    sleep(2);
-    return trim(shell_exec('pgrep nvidia_gpu_exporter')) ? true : false;
+    sleep(3); // Give it a bit more time to start
+    
+    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
+    if ($isRunning) {
+        return ['success' => true, 'message' => 'Service started successfully'];
+    } else {
+        return ['success' => false, 'message' => 'Failed to start service: ' . trim($output)];
+    }
 }
 
 function stopService() {
+    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
+    if (!$isRunning) {
+        return ['success' => true, 'message' => 'Service is already stopped'];
+    }
+    
     shell_exec('/usr/local/emhttp/plugins/nvidia_gpu_exporter/scripts/stop 2>&1');
-    sleep(1);
-    return !trim(shell_exec('pgrep nvidia_gpu_exporter'));
+    sleep(2);
+    
+    $isRunning = trim(shell_exec('pgrep nvidia_gpu_exporter'));
+    if (!$isRunning) {
+        return ['success' => true, 'message' => 'Service stopped successfully'];
+    } else {
+        return ['success' => false, 'message' => 'Failed to stop service'];
+    }
 }
 ?>
 ]]>
@@ -359,16 +412,33 @@ BIND_ADDRESS=${BIND_ADDRESS:-0.0.0.0}
 # Check if already running
 if pgrep nvidia_gpu_exporter > /dev/null; then
     echo "nvidia_gpu_exporter is already running"
+    exit 0  # Changed from exit 1 to exit 0 since this is not an error
+fi
+
+# Check if nvidia-smi is available
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+    echo "Error: nvidia-smi not found. Please install NVIDIA drivers."
     exit 1
 fi
 
 # Start the service
+echo "Starting nvidia_gpu_exporter on ${BIND_ADDRESS}:${PORT}"
 /usr/local/bin/nvidia_gpu_exporter --web.listen-address="${BIND_ADDRESS}:${PORT}" > /var/log/nvidia_gpu_exporter.log 2>&1 &
 
-if [ $? -eq 0 ]; then
+# Give it a moment to start
+sleep 1
+
+# Check if it started successfully
+if pgrep nvidia_gpu_exporter > /dev/null; then
     echo "nvidia_gpu_exporter started successfully"
+    exit 0
 else
     echo "Failed to start nvidia_gpu_exporter"
+    # Show last few lines of log for debugging
+    if [ -f /var/log/nvidia_gpu_exporter.log ]; then
+        echo "Last log entries:"
+        tail -5 /var/log/nvidia_gpu_exporter.log
+    fi
     exit 1
 fi
 ]]>
