@@ -2,7 +2,7 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "nvidia_gpu_exporter">
   <!ENTITY author    "mac-lucky">
-  <!ENTITY version   "1.3.2">
+  <!ENTITY version   "1.0.0">
   <!ENTITY launch    "Settings/nvidia_gpu_exporter">
   <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
@@ -14,12 +14,14 @@
 <PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.9.0" support="https://github.com/mac-lucky/nvidia-gpu-exporter-plugin/issues">
 
 <CHANGES>
-###1.3.2###
-- Updated to NVIDIA GPU Exporter v1.3.2
-- Auto-discovery of nvidia-smi metric fields
-- Configurable web interface on port 9835
-- Systemd service management
-- Support for remote nvidia-smi execution
+
+###2025.08.16
+- Initial release
+- Nvidia GPU Exporter for Prometheus monitoring
+- Start/Stop/Restart controls via web interface
+- Configurable port, log level, and autostart options
+- Based on utkuozdemir/nvidia_gpu_exporter v1.2.8
+
 </CHANGES>
 
 <FILE Run="/bin/bash">
