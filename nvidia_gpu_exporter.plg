@@ -52,7 +52,7 @@ echo "NVIDIA GPU Exporter plugin installed successfully"
 <FILE Name="/tmp/&name;-uninstall" Run="/bin/bash" Method="remove">
 <INLINE>
 # Stop service if running
-if pgrep nvidia_gpu_exporter >/dev/null 2>&1; then
+if pgrep nvidia_gpu_exporter >/dev/null 2>&amp;1; then
     pkill nvidia_gpu_exporter
 fi
 
