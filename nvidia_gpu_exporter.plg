@@ -130,7 +130,7 @@ rm -f nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
 <FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.page">
 <INLINE>
 <![CDATA[
-Menu="Settings"
+Menu="Settings/nvidia_gpu_exporter"
 Title="NVIDIA GPU Exporter"
 Icon="nvidia_exporter.png"
 ---
