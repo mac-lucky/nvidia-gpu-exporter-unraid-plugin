@@ -28,65 +28,21 @@ start_service() {
     
     echo "Starting $PLUGIN_NAME..."
     
-    # Check if binary exists
-    if [ ! -f "$BINARY_PATH" ]; then
-        echo "Error: nvidia_gpu_exporter binary not found at $BINARY_PATH"
-        echo "Please ensure the binary is downloaded and installed"
-        return 1
-    fi
-    
-    # Check if binary is executable
-    if [ ! -x "$BINARY_PATH" ]; then
-        echo "Error: nvidia_gpu_exporter binary is not executable"
-        chmod +x "$BINARY_PATH"
-    fi
-    
-    # Check if nvidia-smi is available (requirement for nvidia_gpu_exporter)
-    if ! command -v nvidia-smi &> /dev/null; then
-        echo "Error: nvidia-smi not found. Please ensure Nvidia drivers are installed."
-        return 1
-    fi
-    
-    # Test if nvidia-smi works
-    if ! nvidia-smi &> /dev/null; then
-        echo "Error: nvidia-smi failed. Please ensure Nvidia drivers are working properly."
-        return 1
-    fi
-    
-    # Create log file and set permissions
-    touch "$LOG_FILE"
-    
-    echo "Binary: $BINARY_PATH" >> "$LOG_FILE"
-    echo "Port: ${port:-9835}" >> "$LOG_FILE"
-    echo "Log Level: ${log_level:-info}" >> "$LOG_FILE"
-    echo "Starting nvidia_gpu_exporter..." >> "$LOG_FILE"
-    
     # Start the service in background
     nohup "$BINARY_PATH" \
         --web.listen-address="0.0.0.0:${port:-9835}" \
         --log.level="${log_level:-info}" \
-        >> "$LOG_FILE" 2>&1 & 
+        > "$LOG_FILE" 2>&1 & 
     
-    local service_pid=$!
-    echo $service_pid > "$PID_FILE"
-    
-    echo "Started with PID: $service_pid"
-    echo "Started with PID: $service_pid" >> "$LOG_FILE"
+    echo $! > "$PID_FILE"
     
     # Wait a moment and check if it's still running
-    sleep 3
-    if kill -0 $service_pid 2>/dev/null; then
-        echo "$PLUGIN_NAME started successfully on port ${port:-9835}"
-        echo "$PLUGIN_NAME started successfully" >> "$LOG_FILE"
+    sleep 2
+    if kill -0 $(cat "$PID_FILE") 2>/dev/null; then
+        echo "$PLUGIN_NAME started successfully"
         return 0
     else
-        echo "Failed to start $PLUGIN_NAME - check log file: $LOG_FILE"
-        echo "Failed to start $PLUGIN_NAME" >> "$LOG_FILE"
-        
-        # Show last few lines of log for debugging
-        echo "Last 5 lines of log:"
-        tail -5 "$LOG_FILE"
-        
+        echo "Failed to start $PLUGIN_NAME"
         rm -f "$PID_FILE"
         return 1
     fi

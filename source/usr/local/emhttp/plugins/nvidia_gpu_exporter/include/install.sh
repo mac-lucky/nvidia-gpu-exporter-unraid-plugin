@@ -2,22 +2,10 @@
 
 PLUGIN_NAME="nvidia_gpu_exporter"
 
-echo "Installing $PLUGIN_NAME plugin..."
-
 # Download the binary if it doesn't exist
 if [ ! -f "/usr/local/bin/nvidia_gpu_exporter" ]; then
-    echo "nvidia_gpu_exporter binary not found, downloading..."
+    echo "Downloading nvidia_gpu_exporter binary..."
     /usr/local/emhttp/plugins/$PLUGIN_NAME/include/download.sh download
-    
-    # Check if download was successful
-    if [ ! -f "/usr/local/bin/nvidia_gpu_exporter" ]; then
-        echo "Warning: Failed to download nvidia_gpu_exporter binary"
-        echo "You can manually download it from the plugin web interface"
-    else
-        echo "nvidia_gpu_exporter binary downloaded successfully"
-    fi
-else
-    echo "nvidia_gpu_exporter binary already exists"
 fi
 
 # Create autostart script
@@ -57,12 +45,11 @@ EOF
 
 chmod +x /etc/rc.d/rc.$PLUGIN_NAME
 
-# Start the service if autostart is enabled and binary exists
+# Start the service if autostart is enabled
 CONFIG_FILE="/boot/config/plugins/$PLUGIN_NAME/settings.cfg"
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
-    if [ "${autostart:-yes}" == "yes" ] && [ -f "/usr/local/bin/nvidia_gpu_exporter" ]; then
-        echo "Starting $PLUGIN_NAME service..."
+    if [ "${autostart:-yes}" == "yes" ]; then
         /usr/local/emhttp/plugins/$PLUGIN_NAME/include/service.sh start
     fi
 fi

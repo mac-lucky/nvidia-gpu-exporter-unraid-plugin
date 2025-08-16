@@ -6,27 +6,6 @@ Icon="nvidia_gpu_exporter.png"
 $service_running = shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/service.sh status");
 $service_status = trim($service_running) == "running" ? true : false;
 
-// Check if binary exists
-$binary_exists = file_exists("/usr/local/bin/nvidia_gpu_exporter");
-
-// Check if nvidia-smi is available
-$nvidia_smi_available = !empty(shell_exec("which nvidia-smi 2>/dev/null"));
-
-// Check if nvidia-smi works
-$nvidia_smi_works = false;
-if ($nvidia_smi_available) {
-    $nvidia_test = shell_exec("nvidia-smi 2>/dev/null");
-    $nvidia_smi_works = !empty($nvidia_test) && strpos($nvidia_test, 'NVIDIA-SMI') !== false;
-}
-
-// Get log file content for troubleshooting
-$log_content = '';
-$log_file = '/var/log/nvidia_gpu_exporter.log';
-if (file_exists($log_file)) {
-    $log_lines = file($log_file);
-    $log_content = implode('', array_slice($log_lines, -10)); // Last 10 lines
-}
-
 // Get configuration
 $config_file = "/boot/config/plugins/nvidia_gpu_exporter/settings.cfg";
 $config = parse_ini_file($config_file, false, INI_SCANNER_RAW) ?: [];
@@ -38,19 +17,13 @@ $autostart = $config['autostart'] ?? 'yes';
 if (isset($_POST['action'])) {
     switch ($_POST['action']) {
         case 'start':
-            $start_output = shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/service.sh start 2>&1");
+            shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/service.sh start");
             break;
         case 'stop':
             shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/service.sh stop");
             break;
         case 'restart':
             shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/service.sh restart");
-            break;
-        case 'download_binary':
-            $download_output = shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/download.sh download 2>&1");
-            break;
-        case 'troubleshoot':
-            $troubleshoot_output = shell_exec("/usr/local/emhttp/plugins/nvidia_gpu_exporter/include/troubleshoot.sh 2>&1");
             break;
         case 'save_config':
             $new_port = $_POST['port'] ?? '9835';
@@ -70,7 +43,7 @@ if (isset($_POST['action'])) {
             break;
     }
     // Refresh page to show updated status
-    echo '<script>setTimeout(function(){ window.location.reload(); }, 1000);</script>';
+    echo '<script>window.location.reload();</script>';
     exit;
 }
 ?>
@@ -171,59 +144,6 @@ function saveConfig() {
     <?php endif; ?>
 </div>
 
-<!-- Diagnostic Information -->
-<?php if (!$binary_exists || !$nvidia_smi_available || !$nvidia_smi_works): ?>
-<div style="background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; padding: 10px; border-radius: 5px; margin: 10px 0;">
-    <h4>⚠️ System Requirements Check:</h4>
-    <ul>
-        <li>Binary exists: <?php echo $binary_exists ? '✅ Yes' : '❌ No'; ?></li>
-        <li>nvidia-smi available: <?php echo $nvidia_smi_available ? '✅ Yes' : '❌ No'; ?></li>
-        <li>nvidia-smi working: <?php echo $nvidia_smi_works ? '✅ Yes' : '❌ No'; ?></li>
-    </ul>
-    
-    <?php if (!$binary_exists): ?>
-        <p><strong>Missing Binary:</strong> The nvidia_gpu_exporter binary is not installed.</p>
-        <button class="btn-primary" onclick="submitAction('download_binary')">Download Binary</button>
-    <?php endif; ?>
-    
-    <?php if (!$nvidia_smi_available || !$nvidia_smi_works): ?>
-        <p><strong>Nvidia Driver Issue:</strong> Please ensure Nvidia drivers are properly installed and working.</p>
-    <?php endif; ?>
-</div>
-<?php endif; ?>
-
-<!-- Show startup output if available -->
-<?php if (isset($start_output) && !empty($start_output)): ?>
-<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; margin: 10px 0;">
-    <h4>Service Start Output:</h4>
-    <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px;"><?php echo htmlspecialchars($start_output); ?></pre>
-</div>
-<?php endif; ?>
-
-<!-- Show download output if available -->
-<?php if (isset($download_output) && !empty($download_output)): ?>
-<div style="background-color: #f8f9fa; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; margin: 10px 0;">
-    <h4>Download Output:</h4>
-    <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px;"><?php echo htmlspecialchars($download_output); ?></pre>
-</div>
-<?php endif; ?>
-
-<!-- Show troubleshoot output if available -->
-<?php if (isset($troubleshoot_output) && !empty($troubleshoot_output)): ?>
-<div style="background-color: #e7f3ff; border: 1px solid #b8daff; padding: 10px; border-radius: 5px; margin: 10px 0;">
-    <h4>Troubleshoot Results:</h4>
-    <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto;"><?php echo htmlspecialchars($troubleshoot_output); ?></pre>
-</div>
-<?php endif; ?>
-
-<!-- Show log content if service failed to start -->
-<?php if (!$service_status && !empty($log_content)): ?>
-<div style="background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; margin: 10px 0;">
-    <h4>Recent Log Entries:</h4>
-    <pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto;"><?php echo htmlspecialchars($log_content); ?></pre>
-</div>
-<?php endif; ?>
-
 <div class="button-group">
     <?php if ($service_status): ?>
         <button class="btn-danger" onclick="submitAction('stop')">Stop Service</button>
@@ -231,7 +151,6 @@ function saveConfig() {
     <?php else: ?>
         <button class="btn-success" onclick="submitAction('start')">Start Service</button>
     <?php endif; ?>
-    <button class="btn-primary" onclick="submitAction('troubleshoot')">Run Diagnostics</button>
 </div>
 
 <div class="config-section">

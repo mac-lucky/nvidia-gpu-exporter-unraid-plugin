@@ -6,7 +6,7 @@
   <!ENTITY launch    "Settings/nvidia_gpu_exporter">
   <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main/nvidia_gpu_exporter.plg">
-  <!ENTITY md5       "3bed7ba4f56e37c2a7a66f3be9ce699b">
+  <!ENTITY md5       "02ad8d59bd6a5639450158dbb4f78fab">
   <!ENTITY packages  "/boot/config/plugins/&name;/packages">
   <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
 ]>
