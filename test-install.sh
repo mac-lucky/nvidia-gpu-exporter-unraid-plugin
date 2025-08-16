@@ -17,11 +17,11 @@ mkdir -p "$TEMP_DIR"
 cd "$TEMP_DIR"
 
 echo "Downloading nvidia_gpu_exporter binary..."
-wget -q "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.2.3/nvidia_gpu_exporter_1.2.3_linux_x86_64.tar.gz"
+wget -q "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz"
 
 if [ $? -eq 0 ]; then
     echo "Download successful. Extracting..."
-    tar -xzf nvidia_gpu_exporter_1.2.3_linux_x86_64.tar.gz
+    tar -xzf nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz
     chmod +x nvidia_gpu_exporter
     
     echo "Testing binary..."
