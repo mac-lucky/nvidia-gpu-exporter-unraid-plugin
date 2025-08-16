@@ -1,0 +1,145 @@
+<?PHP
+/* Copyright 2025, mac-lucky.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License version 2,
+ * as published by the Free Software Foundation.
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ */
+?>
+<?
+$plugin = "nvidia-gpu-exporter";
+$docroot = $docroot ?? $_SERVER['DOCUMENT_ROOT'] ?: '/usr/local/emhttp';
+$translations = file_exists("$docroot/webGui/include/Translations.php");
+require_once "$docroot/webGui/include/Helpers.php";
+if ($translations) {
+  $_SERVER['REQUEST_URI'] = 'settings';
+  require_once "$docroot/webGui/include/Translations.php";
+} else {
+  // legacy support (without javascript)
+  $noscript = true;
+  require_once "$docroot/webGui/include/Legacy.php";
+}
+?>
+
+<script>
+$(function() {
+    // Load initial status
+    loadStatus();
+    
+    // Set up auto-refresh every 5 seconds
+    setInterval(loadStatus, 5000);
+});
+
+function loadStatus() {
+    $('#status-indicator').load('/plugins/nvidia-gpu-exporter/include/status.php');
+}
+
+function serviceCommand(action) {
+    $.post('/plugins/nvidia-gpu-exporter/include/service.php', {action: action}, function(data) {
+        setTimeout(loadStatus, 1000);
+        if (data.trim()) {
+            $('#output').html('<pre>' + data + '</pre>').show();
+            setTimeout(function() {
+                $('#output').fadeOut();
+            }, 3000);
+        }
+    });
+}
+</script>
+
+<style>
+.nvidia-status {
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+.status-running {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+.status-stopped {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+.nvidia-buttons {
+    margin: 10px 0;
+}
+.nvidia-buttons button {
+    margin-right: 10px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.btn-start {
+    background-color: #28a745;
+    color: white;
+}
+.btn-stop {
+    background-color: #dc3545;
+    color: white;
+}
+.btn-restart {
+    background-color: #ffc107;
+    color: black;
+}
+#output {
+    margin-top: 10px;
+    display: none;
+}
+</style>
+
+<form markdown="1" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="nvidia-gpu-exporter/nvidia-gpu-exporter.cfg">
+
+# NVIDIA GPU Exporter
+
+This plugin provides NVIDIA GPU metrics exporter for Prometheus monitoring.
+
+**Current Status:**
+<div id="status-indicator">Loading...</div>
+
+**Service Control:**
+<div class="nvidia-buttons">
+    <button type="button" class="btn-start" onclick="serviceCommand('start')">Start</button>
+    <button type="button" class="btn-stop" onclick="serviceCommand('stop')">Stop</button>
+    <button type="button" class="btn-restart" onclick="serviceCommand('restart')">Restart</button>
+</div>
+
+<div id="output"></div>
+
+**Information:**
+- **Service Port:** 9835
+- **Metrics URL:** http://[SERVER_IP]:9835/metrics
+- **Log File:** /var/log/nvidia-gpu-exporter.log
+
+**Description:**
+The NVIDIA GPU Exporter collects NVIDIA GPU metrics and exposes them in Prometheus format. 
+This allows monitoring of GPU utilization, memory usage, temperature, and other important metrics.
+
+To use with Prometheus, add the following to your prometheus.yml:
+```
+scrape_configs:
+  - job_name: 'nvidia-gpu'
+    static_configs:
+      - targets: ['unraid-server:9835']
+```
+
+**Requirements:**
+- NVIDIA GPU with driver installed
+- nvidia-ml-py library (automatically installed)
+
+Done
+</form>
+
+<script type="text/javascript">
+function done() {
+    // Reload status after form submission
+    setTimeout(loadStatus, 1000);
+}
+</script>
