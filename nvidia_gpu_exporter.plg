@@ -146,7 +146,7 @@ $cfg = parse_ini_file("/boot/config/plugins/$plugin/$plugin.cfg");
 $var = parse_ini_file("/var/local/emhttp/var.ini");
 
 // Service status
-$isRunning = !empty(trim(shell_exec('pgrep -f "/usr/local/bin/nvidia_gpu_exporter"')));
+$isRunning = !empty(trim(shell_exec('pgrep nvidia_gpu_exporter')));
 $port = $cfg['PORT'] ?: '9835';
 $bind_address = $cfg['BIND_ADDRESS'] ?: '0.0.0.0';
 $autostart = $cfg['AUTOSTART'] ?: 'yes';
