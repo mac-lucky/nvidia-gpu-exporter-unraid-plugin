@@ -52,26 +52,29 @@ Add the following to your Prometheus configuration:
 
 ```yaml
 scrape_configs:
-  - job_name: 'nvidia-gpu'
+  - job_name: "nvidia-gpu"
     static_configs:
-      - targets: ['your-unraid-server:9835']
+      - targets: ["your-unraid-server:9835"]
     scrape_interval: 15s
 ```
 
 ### Grafana Dashboard
 
 You can use existing Grafana dashboards for nvidia_gpu_exporter, such as:
+
 - Dashboard ID: 14574 (Nvidia GPU Exporter)
 - Or create your own custom dashboard using the available metrics
 
 ## Metrics Endpoint
 
 Once running, metrics are available at:
+
 ```
 http://your-server-ip:9835/metrics
 ```
 
 Example metrics include:
+
 ```
 nvidia_gpu_utilization_gpu{gpu="0"} 45
 nvidia_gpu_memory_used_bytes{gpu="0"} 2147483648
@@ -88,16 +91,19 @@ nvidia_gpu_power_draw_watts{gpu="0"} 150
 ## Troubleshooting
 
 ### Service Won't Start
+
 1. Check that Nvidia drivers are properly installed and loaded
 2. Verify the GPU is detected: `nvidia-smi`
 3. Check the log file: `/var/log/nvidia_gpu_exporter.log`
 
 ### No Metrics Available
+
 1. Ensure the service is running
 2. Check that the configured port is not blocked by firewall
 3. Verify Nvidia drivers are working: `nvidia-smi`
 
 ### Permission Issues
+
 1. Ensure the nvidia_gpu_exporter binary has execute permissions
 2. Check that the service can access GPU information
 
@@ -112,9 +118,11 @@ nvidia_gpu_power_draw_watts{gpu="0"} 150
 ## Support
 
 For issues with this plugin:
+
 - [GitHub Issues](https://github.com/mac-lucky/nvidia-gpu-exporter-plugin/issues)
 
 For issues with the underlying exporter:
+
 - [nvidia_gpu_exporter GitHub](https://github.com/utkuozdemir/nvidia_gpu_exporter)
 
 ## License
