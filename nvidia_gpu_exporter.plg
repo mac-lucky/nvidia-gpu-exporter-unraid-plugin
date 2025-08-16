@@ -5,7 +5,7 @@
 <!ENTITY author    "mac-lucky">
 <!ENTITY version   "1.3.2">
 <!ENTITY md5       "18fda6e8b4f2efda39523bc75d1410f6">
-<!ENTITY launch    "UserUtilities/nvidia_gpu_exporter">
+<!ENTITY launch    "Settings/nvidia_gpu_exporter">
 <!ENTITY gitURL    "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main">
 <!ENTITY pluginURL "&gitURL;/nvidia_gpu_exporter.plg">
 <!ENTITY binURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz">
@@ -130,7 +130,7 @@ rm -f nvidia_gpu_exporter.tar.gz nvidia_gpu_exporter
 <FILE Name="/usr/local/emhttp/plugins/nvidia_gpu_exporter/nvidia_gpu_exporter.page">
 <INLINE>
 <![CDATA[
-Menu="UserUtilities"
+Menu="Settings"
 Title="NVIDIA GPU Exporter"
 Icon="nvidia_exporter.png"
 ---
