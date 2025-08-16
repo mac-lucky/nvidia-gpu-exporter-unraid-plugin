@@ -6,7 +6,7 @@
   <!ENTITY launch    "Settings/NvidiaGpuExporter">
   <!ENTITY pluginURL "">
   <!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz">
-  <!ENTITY md5       "">
+  <!ENTITY md5       "18fda6e8b4f2efda39523bc75d1410f6">
 ]>
 
 <PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.8.0">

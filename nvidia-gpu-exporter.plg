@@ -7,7 +7,7 @@
   <!ENTITY gitURL    "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main">
   <!ENTITY pluginURL "&gitURL;/nvidia-gpu-exporter.plg">
   <!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&version;/nvidia_gpu_exporter_&version;_linux_x86_64.tar.gz">
-  <!ENTITY md5       "">
+  <!ENTITY md5       "18fda6e8b4f2efda39523bc75d1410f6">
 ]>
 
 <PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.8.0" icon="&gitURL;/nvidia-gpu-exporter.png">
