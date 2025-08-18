@@ -1,0 +1,511 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "nvidia-gpu-exporter">
+<!ENTITY author    "mac-lucky">
+<!ENTITY version   "2025.01.18">
+<!ENTITY md5       "TBD">
+<!ENTITY launch    "Settings/&name;">
+<!ENTITY gitURL    "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main">
+<!ENTITY pluginURL "&gitURL;/nvidia_gpu_exporter.plg">
+<!ENTITY exporterVersion "1.3.2">
+<!ENTITY exporterURL "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&exporterVersion;/nvidia_gpu_exporter_&exporterVersion;_linux_amd64.tar.gz">
+<!ENTITY packages  "/boot/config/plugins/&name;/packages">
+<!ENTITY plugin    "/boot/config/plugins/&name;">
+<!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.11.0">
+
+<CHANGES>
+###2025.01.18
+- Initial release
+- NVIDIA GPU metrics exporter for Prometheus
+- Based on nvidia_gpu_exporter v1.3.2
+- Web interface for configuration and control
+- Service management with auto-start option
+- Configurable port (default 9835)
+</CHANGES>
+
+<!--
+This plugin installs and manages the NVIDIA GPU Exporter service for Unraid.
+It provides Prometheus-compatible metrics for NVIDIA GPUs accessible via nvidia-smi.
+-->
+
+<FILE Run="/bin/bash">
+<INLINE>
+# Remove old plugin files
+rm -rf &plugin; &emhttp;
+</INLINE>
+</FILE>
+
+<!--
+Download and install nvidia-gpu-exporter binary
+-->
+<FILE Name="&packages;/nvidia-gpu-exporter-&exporterVersion;.tar.gz" Run="upgradepkg --install-new">
+<URL>&exporterURL;</URL>
+</FILE>
+
+<!--
+Extract and install the binary
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+# Create directories
+mkdir -p &plugin;
+mkdir -p &emhttp;
+mkdir -p /usr/local/bin
+
+# Extract the binary
+cd /tmp
+tar -xzf &packages;/nvidia-gpu-exporter-&exporterVersion;.tar.gz
+cp nvidia_gpu_exporter /usr/local/bin/nvidia-gpu-exporter
+chmod +x /usr/local/bin/nvidia-gpu-exporter
+
+# Set ownership
+chown root:root /usr/local/bin/nvidia-gpu-exporter
+
+# Create default config
+cat > &plugin;/nvidia-gpu-exporter.cfg &lt;&lt; 'EOF'
+# NVIDIA GPU Exporter Configuration
+SERVICE="disable"
+PORT="9835"
+AUTOSTART="yes"
+EXTRA_ARGS=""
+EOF
+
+echo "NVIDIA GPU Exporter binary installed successfully"
+</INLINE>
+</FILE>
+
+<!--
+Install web interface files
+-->
+<FILE Name="&emhttp;/nvidia-gpu-exporter.page">
+<INLINE>
+<![CDATA[
+Menu="Utilities"
+Title="NVIDIA GPU Exporter"
+Icon="nvidia_exporter.png"
+---
+<?PHP
+$plugin = "nvidia-gpu-exporter";
+$docroot = "/usr/local/emhttp/plugins/$plugin";
+$translations = file_exists("$docroot/languages/" . $_SESSION['locale'] . ".txt") ? "$docroot/languages/" . $_SESSION['locale'] . ".txt" : "$docroot/languages/en_US.txt";
+if (file_exists($translations)) {
+  extract(parse_ini_file($translations, true));
+}
+?>
+
+<link type="text/css" rel="stylesheet" href="<?=$docroot;?>/nvidia-gpu-exporter.css">
+
+<div id="title">
+  <span class="left">
+    <img src="<?=$docroot;?>/nvidia_exporter.png" class="icon">
+    <?=_("NVIDIA GPU Exporter")?>
+  </span>
+</div>
+
+<form markdown="1" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="<?=$plugin;?>/nvidia-gpu-exporter.cfg">
+
+<?
+$cfg = parse_ini_file("/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg");
+$service = isset($cfg['SERVICE']) ? $cfg['SERVICE'] : 'disable';
+$port = isset($cfg['PORT']) ? $cfg['PORT'] : '9835';
+$runas = isset($cfg['RUNAS']) ? $cfg['RUNAS'] : 'root';
+?>
+
+**NVIDIA GPU Exporter Service:**
+: <select name="SERVICE" size="1" onChange="checkRunning(this.form);">
+  <?=mk_option($service, "disable", "Disabled");?>
+  <?=mk_option($service, "enable", "Enabled");?>
+  </select>
+
+**Port:**
+: <input type="number" name="PORT" min="1024" max="65535" value="<?=$port;?>" placeholder="9835" required>
+
+**Run As:**
+: <select name="RUNAS" size="1">
+  <?=mk_option($runas, "root", "root");?>
+  </select>
+
+<br>
+<input type="submit" name="#apply" value="Apply"><input type="button" value="Done" onclick="done()">
+</form>
+
+<div id="status"></div>
+
+<script>
+function checkRunning(form) {
+  if (form.SERVICE.value == "enable") {
+    $("#status").load("/plugins/nvidia-gpu-exporter/scripts/start", function() {
+      setTimeout(function() {
+        $("#status").load("/plugins/nvidia-gpu-exporter/scripts/status");
+      }, 2000);
+    });
+  } else {
+    $("#status").load("/plugins/nvidia-gpu-exporter/scripts/stop", function() {
+      setTimeout(function() {
+        $("#status").load("/plugins/nvidia-gpu-exporter/scripts/status");
+      }, 2000);
+    });
+  }
+}
+
+$(function() {
+  $("#status").load("/plugins/nvidia-gpu-exporter/scripts/status");
+});
+
+function done() {
+  window.location.href = '/Settings';
+}
+</script>
+]]>
+</INLINE>
+</FILE>
+
+<!--
+Install PHP backend script
+-->
+<FILE Name="&emhttp;/nvidia-gpu-exporter.php">
+<INLINE>
+<![CDATA[
+<?PHP
+$plugin = "nvidia-gpu-exporter";
+$docroot = "/usr/local/emhttp/plugins/$plugin";
+
+switch ($_POST['action']) {
+  case 'start':
+    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/start 2>&1");
+    break;
+  case 'stop':
+    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/stop 2>&1");
+    break;
+  case 'restart':
+    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/stop 2>&1");
+    sleep(1);
+    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/start 2>&1");
+    break;
+  case 'status':
+    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/status 2>&1");
+    break;
+  default:
+    echo "Invalid action";
+}
+?>
+]]>
+</INLINE>
+</FILE>
+
+<!--
+Install service control scripts
+-->
+<FILE Name="&emhttp;/scripts/start" Mode="0755">
+<INLINE>
+#!/bin/bash
+plugin="nvidia-gpu-exporter"
+cfg="/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg"
+
+if [ -f "$cfg" ]; then
+  source "$cfg"
+else
+  echo "Configuration file not found"
+  exit 1
+fi
+
+if [ "$SERVICE" = "enable" ]; then
+  if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
+    echo "NVIDIA GPU Exporter is already running"
+  else
+    echo "Starting NVIDIA GPU Exporter on port $PORT..."
+    nohup /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" > /var/log/nvidia-gpu-exporter.log 2>&amp;1 &amp;
+    sleep 2
+    if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
+      echo "NVIDIA GPU Exporter started successfully"
+    else
+      echo "Failed to start NVIDIA GPU Exporter"
+      cat /var/log/nvidia-gpu-exporter.log
+    fi
+  fi
+else
+  echo "NVIDIA GPU Exporter is disabled"
+fi
+</INLINE>
+</FILE>
+
+<FILE Name="&emhttp;/scripts/stop" Mode="0755">
+<INLINE>
+#!/bin/bash
+echo "Stopping NVIDIA GPU Exporter..."
+pkill -f "nvidia-gpu-exporter"
+sleep 2
+if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
+  echo "Force killing NVIDIA GPU Exporter..."
+  pkill -9 -f "nvidia-gpu-exporter"
+fi
+echo "NVIDIA GPU Exporter stopped"
+</INLINE>
+</FILE>
+
+<FILE Name="&emhttp;/scripts/status" Mode="0755">
+<INLINE>
+#!/bin/bash
+plugin="nvidia-gpu-exporter"
+cfg="/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg"
+
+if [ -f "$cfg" ]; then
+  source "$cfg"
+else
+  echo "Configuration file not found"
+  exit 1
+fi
+
+if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
+  echo "<div style='color: green;'><b>Status:</b> NVIDIA GPU Exporter is running</div>"
+  echo "<div><b>Port:</b> $PORT</div>"
+  echo "<div><b>Metrics URL:</b> <a href='http://$(hostname):$PORT/metrics' target='_blank'>http://$(hostname):$PORT/metrics</a></div>"
+  echo "<div><b>PID:</b> $(pgrep -f nvidia-gpu-exporter)</div>"
+else
+  echo "<div style='color: red;'><b>Status:</b> NVIDIA GPU Exporter is not running</div>"
+fi
+
+if [ -f "/var/log/nvidia-gpu-exporter.log" ]; then
+  echo "<div style='margin-top: 10px;'><b>Last log entries:</b></div>"
+  echo "<pre style='background: #f0f0f0; padding: 10px; font-size: 12px; max-height: 200px; overflow-y: auto;'>"
+  tail -20 /var/log/nvidia-gpu-exporter.log
+  echo "</pre>"
+fi
+</INLINE>
+</FILE>
+
+<!--
+Install CSS for web interface
+-->
+<FILE Name="&emhttp;/nvidia-gpu-exporter.css">
+<INLINE>
+.icon {
+  width: 32px;
+  height: 32px;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+#title {
+  margin-bottom: 20px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+#status {
+  margin-top: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+.prerequisites {
+  margin-bottom: 20px;
+  padding: 15px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background-color: #f0f8ff;
+}
+
+.prerequisites h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.status-item {
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+}
+
+.status-label {
+  font-weight: bold;
+  min-width: 180px;
+  margin-right: 10px;
+}
+
+.status-value {
+  color: #666;
+}
+
+.status-ok {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.status-error {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.warning {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.error {
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.success {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  color: #155724;
+  padding: 10px;
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.loading {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+}
+
+.status-container {
+  margin-bottom: 15px;
+}
+
+.log-container {
+  margin-top: 15px;
+}
+
+.log-container h4 {
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.log-content {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  padding: 10px;
+  font-size: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  font-family: 'Courier New', monospace;
+}
+
+#service-options {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 5px;
+}
+
+input[type="number"], input[type="text"], select {
+  padding: 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+input[type="submit"], input[type="button"] {
+  margin-right: 10px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+input[type="submit"] {
+  background-color: #007bff;
+  color: white;
+}
+
+input[type="button"] {
+  background-color: #6c757d;
+  color: white;
+}
+
+input[type="submit"]:hover, input[type="button"]:hover {
+  opacity: 0.9;
+}
+
+#port-status {
+  margin-left: 10px;
+  font-size: 12px;
+}
+</INLINE>
+</FILE>
+
+<!--
+Copy plugin icon
+-->
+<FILE Name="&emhttp;/nvidia_exporter.png">
+<LOCAL>&gitURL;/nvidia_exporter.png</LOCAL>
+</FILE>
+
+<!--
+Install go script
+-->
+<FILE Name="&plugin;/nvidia-gpu-exporter.sh" Mode="0755">
+<INLINE>
+#!/bin/bash
+plugin="nvidia-gpu-exporter"
+cfg="/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg"
+
+if [ -f "$cfg" ]; then
+  source "$cfg"
+  if [ "$SERVICE" = "enable" ]; then
+    /usr/local/emhttp/plugins/$plugin/scripts/start
+  fi
+fi
+</INLINE>
+</FILE>
+
+<!--
+Auto-start service if enabled
+-->
+<FILE Run="/bin/bash" Method="install">
+<INLINE>
+# Add to Unraid's go script for auto-start
+if ! grep -q "nvidia-gpu-exporter.sh" /boot/config/go; then
+  echo "" >> /boot/config/go
+  echo "# Start NVIDIA GPU Exporter" >> /boot/config/go
+  echo "/boot/config/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh" >> /boot/config/go
+fi
+
+echo "NVIDIA GPU Exporter plugin installation completed successfully!"
+echo "Navigate to Settings -> NVIDIA GPU Exporter to configure and start the service."
+</INLINE>
+</FILE>
+
+<!--
+Remove plugin
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+echo "Removing NVIDIA GPU Exporter plugin..."
+
+# Stop the service
+pkill -f "nvidia-gpu-exporter" 2>/dev/null
+
+# Remove from go script
+sed -i '/nvidia-gpu-exporter/d' /boot/config/go 2>/dev/null
+
+# Remove files
+rm -rf &plugin;
+rm -rf &emhttp;
+rm -f /usr/local/bin/nvidia-gpu-exporter
+rm -f /var/log/nvidia-gpu-exporter.log
+
+echo "NVIDIA GPU Exporter plugin removed successfully!"
+</INLINE>
+</FILE>
+
+</PLUGIN>
