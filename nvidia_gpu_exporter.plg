@@ -141,16 +141,39 @@ if [ ! -f "$BINARY_PATH" ]; then
     exit 1
 fi
 
-# Check if service is already running
-if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null; then
+# Function to verify if PID is actually nvidia-gpu-exporter
+verify_pid() {
+    local pid=$1
+    if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+        local cmdline=$(cat "/proc/$pid/cmdline" 2>/dev/null | tr '\0' ' ')
+        if echo "$cmdline" | grep -q "nvidia-gpu-exporter" && [ "$(readlink /proc/$pid/exe 2>/dev/null)" = "$BINARY_PATH" ]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Check if service is already running with proper verification
+RUNNING_PID=""
+DETECTED_PIDS=$(pgrep -x "nvidia-gpu-exporter" 2>/dev/null)
+for pid in $DETECTED_PIDS; do
+    if verify_pid "$pid"; then
+        RUNNING_PID="$pid"
+        break
+    fi
+done
+
+if [ -n "$RUNNING_PID" ]; then
     echo "NVIDIA GPU Exporter is already running"
-    PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
-    echo "Running with PID: $PID"
+    echo "Running with PID: $RUNNING_PID"
 else
-    # Start the service in background
     echo "Starting nvidia-gpu-exporter service..."
     echo "Command: $BINARY_PATH"
     echo "Log file: $LOG_FILE"
+    
+    # Clean up any phantom processes first
+    pkill -f "/usr/local/bin/nvidia-gpu-exporter" 2>/dev/null || true
+    sleep 1
     
     # Start with explicit background execution
     "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
@@ -159,9 +182,10 @@ else
     
     # Wait and verify startup
     sleep 5
-    if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null; then
-        PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
-        echo "NVIDIA GPU Exporter started successfully with PID: $PID"
+    
+    # Verify the startup PID is still valid and is our process
+    if verify_pid "$STARTUP_PID"; then
+        echo "NVIDIA GPU Exporter started successfully with PID: $STARTUP_PID"
         echo "Service is running on port 9835"
         echo "Logs are available at: $LOG_FILE"
         
@@ -177,13 +201,30 @@ else
         echo "Startup PID was: $STARTUP_PID"
         echo "Current processes:"
         ps aux | grep nvidia-gpu-exporter | grep -v grep || echo "No nvidia-gpu-exporter processes found"
-        echo "Log file content:"
-        if [ -f "$LOG_FILE" ]; then
-            tail -20 "$LOG_FILE"
+        echo "Process verification failed - checking for actual running processes:"
+        
+        # Double-check with alternative method
+        FOUND_PID=""
+        ALL_PIDS=$(pgrep -x "nvidia-gpu-exporter" 2>/dev/null)
+        for pid in $ALL_PIDS; do
+            if verify_pid "$pid"; then
+                FOUND_PID="$pid"
+                echo "Found valid process with PID: $pid"
+                break
+            fi
+        done
+        
+        if [ -z "$FOUND_PID" ]; then
+            echo "Log file content:"
+            if [ -f "$LOG_FILE" ]; then
+                tail -20 "$LOG_FILE"
+            else
+                echo "Log file not created"
+            fi
+            exit 1
         else
-            echo "Log file not created"
+            echo "Service actually started with PID: $FOUND_PID"
         fi
-        exit 1
     fi
 fi
 ]]>
@@ -204,12 +245,12 @@ LOG_FILE="/var/log/nvidia-gpu-exporter.log"
 start_service() {
     if [ -f "$BINARY_PATH" ]; then
         # Check if already running
-        if ! pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+        if ! pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
             echo "$(date): Starting NVIDIA GPU Exporter..." >> "$LOG_FILE"
             nohup "$BINARY_PATH" >> "$LOG_FILE" 2>&1 &
             sleep 3
-            if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
-                PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
+            if pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
+                PID=$(pgrep -x "nvidia-gpu-exporter")
                 echo "$(date): NVIDIA GPU Exporter started with PID: $PID" >> "$LOG_FILE"
                 echo "NVIDIA GPU Exporter started with PID: $PID"
             else
@@ -218,7 +259,7 @@ start_service() {
                 return 1
             fi
         else
-            PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
+            PID=$(pgrep -x "nvidia-gpu-exporter")
             echo "$(date): NVIDIA GPU Exporter already running with PID: $PID" >> "$LOG_FILE"
             echo "NVIDIA GPU Exporter already running with PID: $PID"
         fi
@@ -231,12 +272,12 @@ start_service() {
 
 # Function to stop the service
 stop_service() {
-    if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+    if pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
         echo "$(date): Stopping NVIDIA GPU Exporter..." >> "$LOG_FILE"
         echo "Stopping NVIDIA GPU Exporter..."
         
         # Get all PIDs
-        PIDS=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
+        PIDS=$(pgrep -x "nvidia-gpu-exporter")
         echo "Found PIDs: $PIDS"
         
         # Kill all processes
@@ -248,15 +289,15 @@ stop_service() {
         sleep 3
         
         # Check if any are still running
-        if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+        if pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
             echo "$(date): Force killing remaining NVIDIA GPU Exporter processes..." >> "$LOG_FILE"
             echo "Force killing remaining processes..."
-            pkill -9 -f "/usr/local/bin/nvidia-gpu-exporter"
+            pkill -9 -x "nvidia-gpu-exporter"
             sleep 2
         fi
         
         # Final check
-        if ! pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+        if ! pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
             echo "$(date): NVIDIA GPU Exporter stopped successfully" >> "$LOG_FILE"
             echo "NVIDIA GPU Exporter stopped successfully"
         else
@@ -272,7 +313,7 @@ stop_service() {
 
 # Function to check service status
 status_service() {
-    PIDS=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter" 2>/dev/null)
+    PIDS=$(pgrep -x "nvidia-gpu-exporter" 2>/dev/null)
     if [ -n "$PIDS" ]; then
         echo "NVIDIA GPU Exporter is running with PID(s): $PIDS"
         echo "Service is available on port 9835"
