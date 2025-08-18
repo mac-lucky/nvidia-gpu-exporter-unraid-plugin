@@ -142,25 +142,47 @@ if [ ! -f "$BINARY_PATH" ]; then
 fi
 
 # Check if service is already running
-if pgrep -f nvidia-gpu-exporter > /dev/null; then
+if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null; then
     echo "NVIDIA GPU Exporter is already running"
-    PID=$(pgrep -f nvidia-gpu-exporter)
+    PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
     echo "Running with PID: $PID"
 else
     # Start the service in background
     echo "Starting nvidia-gpu-exporter service..."
-    nohup "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
+    echo "Command: $BINARY_PATH"
+    echo "Log file: $LOG_FILE"
     
-    # Wait a moment and check if it started
-    sleep 2
-    if pgrep -f nvidia-gpu-exporter > /dev/null; then
-        PID=$(pgrep -f nvidia-gpu-exporter)
+    # Start with explicit background execution
+    "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
+    STARTUP_PID=$!
+    echo "Started with PID: $STARTUP_PID"
+    
+    # Wait and verify startup
+    sleep 5
+    if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null; then
+        PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
         echo "NVIDIA GPU Exporter started successfully with PID: $PID"
         echo "Service is running on port 9835"
         echo "Logs are available at: $LOG_FILE"
+        
+        # Verify it's actually responding
+        sleep 2
+        if netstat -tuln 2>/dev/null | grep -q ":9835 " || ss -tuln 2>/dev/null | grep -q ":9835 "; then
+            echo "Service is listening on port 9835"
+        else
+            echo "WARNING: Service started but port 9835 may not be listening yet"
+        fi
     else
         echo "ERROR: Failed to start nvidia-gpu-exporter service"
-        echo "Check the log file for details: $LOG_FILE"
+        echo "Startup PID was: $STARTUP_PID"
+        echo "Current processes:"
+        ps aux | grep nvidia-gpu-exporter | grep -v grep || echo "No nvidia-gpu-exporter processes found"
+        echo "Log file content:"
+        if [ -f "$LOG_FILE" ]; then
+            tail -20 "$LOG_FILE"
+        else
+            echo "Log file not created"
+        fi
         exit 1
     fi
 fi
