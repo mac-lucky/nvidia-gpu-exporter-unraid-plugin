@@ -1,0 +1,111 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "nvidia_gpu_exporter">
+  <!ENTITY author    "mac-lucky">
+  <!ENTITY version   "2025.08.17">
+  <!ENTITY gitURL    "https://github.com/&author;/nvidia-gpu-exporter-plugin/raw/main">
+  <!ENTITY pluginURL "&gitURL;/&name;.plg">
+  <!ENTITY md5       "b85f8f4a88633d45d9c9099406cdc320">
+  <!ENTITY plugin    "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+]>
+
+<PLUGIN  name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" min="6.9.0" support="https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
+
+<CHANGES>
+
+###2025.08.17
+- Initial release - based on nvidia_gpu_exporter v1.3.2
+- Exports NVIDIA GPU metrics via prometheus exporter
+- Provides detailed GPU utilization, memory, temperature, and power metrics
+- Compatible with Prometheus and other monitoring systems
+
+</CHANGES>
+
+<FILE Run="/bin/bash">
+<INLINE>
+rm -f $(ls /boot/config/plugins/&name;/&name;*.tgz 2>/dev/null|grep -v '&version;')
+</INLINE>
+</FILE>
+
+<FILE Name="/boot/config/plugins/&name;/&name;-&version;.tgz" Run="upgradepkg --install-new">
+<URL>&gitURL;/packages/&name;-&version;.tgz</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<FILE Name="&emhttp;/README.md">
+<INLINE>
+**NVIDIA GPU Exporter**
+
+This plugin exports NVIDIA GPU metrics in Prometheus format, providing detailed information about your GPU's performance, utilization, memory usage, temperature, and power consumption.
+
+**Features:**
+- Real-time GPU metrics monitoring
+- Memory utilization tracking
+- Temperature and power monitoring
+- Fan speed monitoring
+- Process information for GPU usage
+- Prometheus-compatible metrics format
+
+**Export URL:** 
+The URL for the exported metrics is: 'http://YOURunRAIDIP:9835/metrics' 
+(to use it in Prometheus add the target: 'YOURunRAIDIP:9835' to your Prometheus yaml)
+
+**Requirements:**
+- NVIDIA GPU with proper drivers installed
+- nvidia-smi utility available on the system
+
+This Plugin is based on nvidia_gpu_exporter: https://github.com/utkuozdemir/nvidia_gpu_exporter
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+
+#Create settings file if not found
+if [ ! -f "&plugin;/settings.cfg" ]; then
+  echo 'start_parameters=--web.listen-address=:9835' > "&plugin;/settings.cfg"
+fi
+
+# Check if nvidia-smi is available
+if ! command -v nvidia-smi &> /dev/null; then
+  echo "ERROR: nvidia-smi not found. Please ensure NVIDIA drivers are properly installed."
+  exit 1
+fi
+
+if [ -z "$(pidof nvidia_gpu_exporter)" ]; then
+  START_PARAMS="$(cat &plugin;/settings.cfg | cut -d '=' -f2-)"
+  echo "-------------Starting NVIDIA GPU Exporter!--------------"
+  if [ -z "$START_PARAMS" ]; then
+    echo "/usr/bin/nvidia_gpu_exporter --web.listen-address=:9835" | at now
+  else
+    echo "/usr/bin/nvidia_gpu_exporter $START_PARAMS" | at now
+  fi
+else
+  echo
+  echo "---Nothing to do, NVIDIA GPU Exporter already started---"
+fi
+
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+
+echo "-------------------------------------------"
+echo "---Uninstalling nvidia_gpu_exporter--------"
+echo "-------------------------------------------"
+# Remove plugin related files
+kill $(pidof nvidia_gpu_exporter) 2>/dev/null
+removepkg &name;-&version;
+rm -rf /usr/local/emhttp/plugins/&name;
+rm -rf &plugin;
+echo
+echo "----------------------------------------------------------"
+echo "---Uninstallation of nvidia_gpu_exporter complete!-------"
+echo "----------------------------------------------------------"
+echo
+
+</INLINE>
+</FILE>
+</PLUGIN>

@@ -1,0 +1,17 @@
+# Build artifacts
+*.tgz
+*.md5
+
+# Temporary files
+/tmp/
+.DS_Store
+
+# Backup files
+*.backup
+
+# IDE files
+.vscode/
+.idea/
+
+# Reference files (for development only)
+reference/
