@@ -485,7 +485,7 @@ if [ "$SERVICE" = "enable" ]; then
     echo "NVIDIA GPU Exporter is already running"
   else
     echo "Starting NVIDIA GPU Exporter on port $PORT..."
-    nohup /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" > /var/log/nvidia-gpu-exporter.log 2>&amp;1 &amp;
+    nohup /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" $EXTRA_ARGS > /var/log/nvidia-gpu-exporter.log 2>&1 &
     sleep 2
     if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
       echo "NVIDIA GPU Exporter started successfully"
@@ -550,6 +550,12 @@ Install CSS for web interface
 -->
 <FILE Name="&emhttp;/nvidia-gpu-exporter.css">
 <INLINE>
+/* Dark theme for NVIDIA GPU Exporter */
+body, .content {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
 .icon {
   width: 32px;
   height: 32px;
@@ -561,43 +567,48 @@ Install CSS for web interface
   margin-bottom: 20px;
   font-size: 18px;
   font-weight: bold;
+  color: #ffffff;
 }
 
 #status {
   margin-top: 20px;
   padding: 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #444;
   border-radius: 5px;
-  background-color: #f9f9f9;
+  background-color: #2a2a2a;
+  color: #e0e0e0;
 }
 
 .prerequisites {
   margin-bottom: 20px;
   padding: 15px;
-  border: 1px solid #ddd;
+  border: 1px solid #444;
   border-radius: 5px;
-  background-color: #f0f8ff;
+  background-color: #2a2a2a;
+  color: #e0e0e0;
 }
 
 .prerequisites h3 {
   margin-top: 0;
-  color: #333;
+  color: #ffffff;
 }
 
 .status-item {
   margin: 8px 0;
   display: flex;
   align-items: center;
+  color: #e0e0e0;
 }
 
 .status-label {
   font-weight: bold;
   min-width: 180px;
   margin-right: 10px;
+  color: #ffffff;
 }
 
 .status-value {
-  color: #666;
+  color: #cccccc;
 }
 
 .status-ok {
@@ -611,27 +622,27 @@ Install CSS for web interface
 }
 
 .warning {
-  background-color: #fff3cd;
-  border: 1px solid #ffeaa7;
-  color: #856404;
+  background-color: #332a00;
+  border: 1px solid #665500;
+  color: #ffcc00;
   padding: 10px;
   border-radius: 4px;
   margin-top: 10px;
 }
 
 .error {
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-  color: #721c24;
+  background-color: #330a0a;
+  border: 1px solid #661515;
+  color: #ff6666;
   padding: 10px;
   border-radius: 4px;
   margin: 10px 0;
 }
 
 .success {
-  background-color: #d4edda;
-  border: 1px solid #c3e6cb;
-  color: #155724;
+  background-color: #0a330a;
+  border: 1px solid #156615;
+  color: #66ff66;
   padding: 10px;
   border-radius: 4px;
   margin: 10px 0;
@@ -639,12 +650,16 @@ Install CSS for web interface
 
 .loading {
   text-align: center;
-  color: #666;
+  color: #cccccc;
   font-style: italic;
 }
 
 .status-container {
   margin-bottom: 15px;
+  background-color: #2a2a2a;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #444;
 }
 
 .log-container {
@@ -653,32 +668,36 @@ Install CSS for web interface
 
 .log-container h4 {
   margin-bottom: 10px;
-  color: #333;
+  color: #ffffff;
 }
 
 .log-content {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: #1a1a1a;
+  border: 1px solid #444;
   padding: 10px;
   font-size: 12px;
   max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
   font-family: 'Courier New', monospace;
+  color: #e0e0e0;
 }
 
 #service-options {
   margin-top: 15px;
   padding: 15px;
-  background-color: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background-color: #2a2a2a;
+  border: 1px solid #444;
   border-radius: 5px;
+  color: #e0e0e0;
 }
 
 input[type="number"], input[type="text"], select {
   padding: 5px;
-  border: 1px solid #ccc;
+  border: 1px solid #555;
   border-radius: 3px;
+  background-color: #333;
+  color: #e0e0e0;
 }
 
 input[type="submit"], input[type="button"] {
@@ -687,25 +706,41 @@ input[type="submit"], input[type="button"] {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  color: white;
 }
 
 input[type="submit"] {
   background-color: #007bff;
-  color: white;
 }
 
 input[type="button"] {
   background-color: #6c757d;
-  color: white;
 }
 
 input[type="submit"]:hover, input[type="button"]:hover {
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 #port-status {
   margin-left: 10px;
   font-size: 12px;
+}
+
+/* Dark theme overrides for Unraid */
+form, form *, small {
+  color: #e0e0e0 !important;
+}
+
+strong, b {
+  color: #ffffff !important;
+}
+
+a {
+  color: #66ccff !important;
+}
+
+a:hover {
+  color: #99ddff !important;
 }
 </INLINE>
 </FILE>
