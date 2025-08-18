@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2025.01.18">
+<!ENTITY version   "2025.08.18">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
 <!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz">
@@ -13,6 +13,10 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="&gitURL;" icon="nvidia_exporter.png" iconURL="&gitURL;/raw/main/nvidia_exporter.png">
 
 <CHANGES>
+###2025.08.18
+- Updated to nvidia-gpu-exporter v1.3.2
+- Auto-updated via GitHub Actions
+
 ###2025.01.18
 - Initial release of NVIDIA GPU Exporter plugin
 - Downloads and installs nvidia-gpu-exporter v1.3.2
