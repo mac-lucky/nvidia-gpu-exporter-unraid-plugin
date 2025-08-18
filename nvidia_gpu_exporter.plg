@@ -494,7 +494,7 @@ if [ "$SERVICE" = "enable" ]; then
     cd /tmp
     
     # Start the service with proper environment
-    /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" $EXTRA_ARGS > /var/log/nvidia-gpu-exporter.log 2>&1 &
+    /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" $EXTRA_ARGS > /var/log/nvidia-gpu-exporter.log 2>&amp;1 &amp;
     
     sleep 3
     if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
