@@ -1,0 +1,388 @@
+<?xml version='1.0' standalone='yes'?>
+
+<!DOCTYPE PLUGIN [
+<!ENTITY name      "nvidia-gpu-exporter">
+<!ENTITY author    "mac-lucky">
+<!ENTITY version   "2025.01.18">
+<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
+<!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
+<!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz">
+<!ENTITY md5       "auto">
+]>
+
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="&gitURL;" icon="nvidia_exporter.png" iconURL="&gitURL;/raw/main/nvidia_exporter.png">
+
+<CHANGES>
+###2025.01.18
+- Initial release of NVIDIA GPU Exporter plugin
+- Downloads and installs nvidia-gpu-exporter v1.3.2
+- Auto-starts service on boot
+- Exports GPU metrics on port 9835
+- Simple background service operation
+- Clean uninstall support
+</CHANGES>
+
+<!--
+NVIDIA GPU Exporter Plugin for Unraid
+This plugin downloads, installs, and manages the nvidia-gpu-exporter service
+which exports NVIDIA GPU metrics for monitoring systems like Prometheus.
+
+The service runs on port 9835 by default and logs to /var/log/nvidia-gpu-exporter.log
+-->
+
+<!-- Download and install the nvidia-gpu-exporter binary -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# Download and install nvidia-gpu-exporter
+echo "Installing NVIDIA GPU Exporter..."
+
+# Set variables
+DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz"
+TEMP_DIR="/tmp/nvidia-gpu-exporter-install"
+BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
+LOG_FILE="/var/log/nvidia-gpu-exporter.log"
+
+# Create temp directory
+mkdir -p "$TEMP_DIR"
+cd "$TEMP_DIR"
+
+# Download the package
+echo "Downloading nvidia-gpu-exporter from GitHub..."
+echo "URL: $DOWNLOAD_URL"
+
+# Try wget with following redirects and user agent
+if wget --no-check-certificate --timeout=30 --tries=3 -L -U "Mozilla/5.0 (X11; Linux x86_64)" "$DOWNLOAD_URL" -O nvidia_gpu_exporter.tar.gz; then
+    echo "Download successful"
+    # Verify the file was downloaded and has content
+    if [ -s nvidia_gpu_exporter.tar.gz ]; then
+        echo "Downloaded file size: $(ls -lh nvidia_gpu_exporter.tar.gz | awk '{print $5}')"
+    else
+        echo "ERROR: Downloaded file is empty"
+        exit 1
+    fi
+else
+    echo "ERROR: Failed to download nvidia-gpu-exporter"
+    echo "Trying alternative download method with curl..."
+    if command -v curl >/dev/null 2>&1; then
+        if curl -L -k --retry 3 --retry-delay 2 -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64)" "$DOWNLOAD_URL" -o nvidia_gpu_exporter.tar.gz; then
+            echo "Download successful with curl"
+            if [ -s nvidia_gpu_exporter.tar.gz ]; then
+                echo "Downloaded file size: $(ls -lh nvidia_gpu_exporter.tar.gz | awk '{print $5}')"
+            else
+                echo "ERROR: Downloaded file is empty"
+                exit 1
+            fi
+        else
+            echo "ERROR: Both wget and curl failed to download the file"
+            exit 1
+        fi
+    else
+        echo "ERROR: curl not available as fallback"
+        exit 1
+    fi
+fi
+
+# Extract the package
+echo "Extracting package..."
+if tar -xzf nvidia_gpu_exporter.tar.gz; then
+    echo "Extraction successful"
+else
+    echo "ERROR: Failed to extract package"
+    exit 1
+fi
+
+# Find and move the binary
+BINARY_FILE=$(find . -name "nvidia_gpu_exporter" -type f)
+if [ -n "$BINARY_FILE" ]; then
+    echo "Installing binary to $BINARY_PATH..."
+    cp "$BINARY_FILE" "$BINARY_PATH"
+    chmod +x "$BINARY_PATH"
+    echo "Binary installed successfully"
+else
+    echo "ERROR: Could not find nvidia_gpu_exporter binary in package"
+    echo "Package contents:"
+    ls -la
+    exit 1
+fi
+
+# Cleanup temp directory
+cd /
+rm -rf "$TEMP_DIR"
+
+# Create log file
+touch "$LOG_FILE"
+chmod 644 "$LOG_FILE"
+
+echo "NVIDIA GPU Exporter installation completed"
+echo "Binary installed at: $BINARY_PATH"
+echo "Log file created at: $LOG_FILE"
+]]>
+</INLINE>
+</FILE>
+
+<!-- Start the service -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# Start nvidia-gpu-exporter service
+echo "Starting NVIDIA GPU Exporter service..."
+
+BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
+LOG_FILE="/var/log/nvidia-gpu-exporter.log"
+
+# Check if binary exists
+if [ ! -f "$BINARY_PATH" ]; then
+    echo "ERROR: nvidia-gpu-exporter binary not found at $BINARY_PATH"
+    exit 1
+fi
+
+# Check if service is already running
+if pgrep -f nvidia-gpu-exporter > /dev/null; then
+    echo "NVIDIA GPU Exporter is already running"
+    PID=$(pgrep -f nvidia-gpu-exporter)
+    echo "Running with PID: $PID"
+else
+    # Start the service in background
+    echo "Starting nvidia-gpu-exporter service..."
+    nohup "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
+    
+    # Wait a moment and check if it started
+    sleep 2
+    if pgrep -f nvidia-gpu-exporter > /dev/null; then
+        PID=$(pgrep -f nvidia-gpu-exporter)
+        echo "NVIDIA GPU Exporter started successfully with PID: $PID"
+        echo "Service is running on port 9835"
+        echo "Logs are available at: $LOG_FILE"
+    else
+        echo "ERROR: Failed to start nvidia-gpu-exporter service"
+        echo "Check the log file for details: $LOG_FILE"
+        exit 1
+    fi
+fi
+]]>
+</INLINE>
+</FILE>
+
+<!-- Auto-start script for boot -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh" Mode="0755">
+<INLINE>
+<![CDATA[
+#!/bin/bash
+# Auto-start script for NVIDIA GPU Exporter
+
+BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
+LOG_FILE="/var/log/nvidia-gpu-exporter.log"
+
+# Function to start the service
+start_service() {
+    if [ -f "$BINARY_PATH" ]; then
+        # Check if already running
+        if ! pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+            echo "$(date): Starting NVIDIA GPU Exporter..." >> "$LOG_FILE"
+            nohup "$BINARY_PATH" >> "$LOG_FILE" 2>&1 &
+            sleep 3
+            if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+                PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
+                echo "$(date): NVIDIA GPU Exporter started with PID: $PID" >> "$LOG_FILE"
+                echo "NVIDIA GPU Exporter started with PID: $PID"
+            else
+                echo "$(date): ERROR: Failed to start NVIDIA GPU Exporter" >> "$LOG_FILE"
+                echo "ERROR: Failed to start NVIDIA GPU Exporter"
+                return 1
+            fi
+        else
+            PID=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
+            echo "$(date): NVIDIA GPU Exporter already running with PID: $PID" >> "$LOG_FILE"
+            echo "NVIDIA GPU Exporter already running with PID: $PID"
+        fi
+    else
+        echo "$(date): ERROR: NVIDIA GPU Exporter binary not found at $BINARY_PATH" >> "$LOG_FILE"
+        echo "ERROR: NVIDIA GPU Exporter binary not found at $BINARY_PATH"
+        return 1
+    fi
+}
+
+# Function to stop the service
+stop_service() {
+    if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+        echo "$(date): Stopping NVIDIA GPU Exporter..." >> "$LOG_FILE"
+        echo "Stopping NVIDIA GPU Exporter..."
+        
+        # Get all PIDs
+        PIDS=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter")
+        echo "Found PIDs: $PIDS"
+        
+        # Kill all processes
+        for PID in $PIDS; do
+            echo "Killing PID: $PID"
+            kill "$PID" 2>/dev/null
+        done
+        
+        sleep 3
+        
+        # Check if any are still running
+        if pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+            echo "$(date): Force killing remaining NVIDIA GPU Exporter processes..." >> "$LOG_FILE"
+            echo "Force killing remaining processes..."
+            pkill -9 -f "/usr/local/bin/nvidia-gpu-exporter"
+            sleep 2
+        fi
+        
+        # Final check
+        if ! pgrep -f "/usr/local/bin/nvidia-gpu-exporter" > /dev/null 2>&1; then
+            echo "$(date): NVIDIA GPU Exporter stopped successfully" >> "$LOG_FILE"
+            echo "NVIDIA GPU Exporter stopped successfully"
+        else
+            echo "$(date): ERROR: Failed to stop NVIDIA GPU Exporter" >> "$LOG_FILE"
+            echo "ERROR: Failed to stop NVIDIA GPU Exporter"
+            return 1
+        fi
+    else
+        echo "$(date): NVIDIA GPU Exporter is not running" >> "$LOG_FILE"
+        echo "NVIDIA GPU Exporter is not running"
+    fi
+}
+
+# Function to check service status
+status_service() {
+    PIDS=$(pgrep -f "/usr/local/bin/nvidia-gpu-exporter" 2>/dev/null)
+    if [ -n "$PIDS" ]; then
+        echo "NVIDIA GPU Exporter is running with PID(s): $PIDS"
+        echo "Service is available on port 9835"
+        
+        # Check if port is actually listening
+        if command -v netstat >/dev/null 2>&1; then
+            if netstat -tuln 2>/dev/null | grep -q ":9835 "; then
+                echo "Port 9835 is listening"
+            else
+                echo "WARNING: Port 9835 is not listening"
+            fi
+        fi
+        return 0
+    else
+        echo "NVIDIA GPU Exporter is not running"
+        return 1
+    fi
+}
+
+# Handle command line arguments
+case "$1" in
+    start)
+        start_service
+        ;;
+    stop)
+        stop_service
+        ;;
+    restart)
+        stop_service
+        sleep 2
+        start_service
+        ;;
+    status)
+        status_service
+        ;;
+    *)
+        # Default action is to start (for auto-start on boot)
+        start_service
+        ;;
+esac
+]]>
+</INLINE>
+</FILE>
+
+<!-- Create the auto-start symlink -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+# Create auto-start functionality
+echo "Setting up auto-start for NVIDIA GPU Exporter..."
+
+SCRIPT_PATH="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh"
+AUTOSTART_DIR="/usr/local/etc/rc.d"
+
+# Create the autostart directory if it doesn't exist
+mkdir -p "$AUTOSTART_DIR"
+
+# Create symlink for auto-start
+if [ -f "$SCRIPT_PATH" ]; then
+    ln -sf "$SCRIPT_PATH" "$AUTOSTART_DIR/rc.nvidia-gpu-exporter"
+    echo "Auto-start configured successfully"
+    echo "The service will automatically start on boot"
+else
+    echo "ERROR: Auto-start script not found at $SCRIPT_PATH"
+fi
+
+# Verify installation
+echo ""
+echo "=== Installation Summary ==="
+echo "Binary location: /usr/local/bin/nvidia-gpu-exporter"
+echo "Log file: /var/log/nvidia-gpu-exporter.log"
+echo "Control script: $SCRIPT_PATH"
+echo "Service port: 9835"
+echo ""
+echo "Manual control commands:"
+echo "  Start:   $SCRIPT_PATH start"
+echo "  Stop:    $SCRIPT_PATH stop"
+echo "  Status:  $SCRIPT_PATH status"
+echo "  Restart: $SCRIPT_PATH restart"
+echo ""
+echo "Process management:"
+echo "  Check if running: pgrep -f nvidia-gpu-exporter"
+echo "  Kill process:     pkill -f nvidia-gpu-exporter"
+echo ""
+echo "NVIDIA GPU Exporter plugin installation completed!"
+]]>
+</INLINE>
+</FILE>
+
+<!-- Plugin removal script -->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+<![CDATA[
+echo "Uninstalling NVIDIA GPU Exporter plugin..."
+
+# Stop the service if running
+if pgrep -f nvidia-gpu-exporter > /dev/null; then
+    echo "Stopping NVIDIA GPU Exporter service..."
+    pkill -f nvidia-gpu-exporter
+    sleep 2
+    
+    # Force kill if still running
+    if pgrep -f nvidia-gpu-exporter > /dev/null; then
+        echo "Force stopping service..."
+        pkill -9 -f nvidia-gpu-exporter
+    fi
+    echo "Service stopped"
+fi
+
+# Remove binary
+if [ -f "/usr/local/bin/nvidia-gpu-exporter" ]; then
+    rm -f "/usr/local/bin/nvidia-gpu-exporter"
+    echo "Removed binary: /usr/local/bin/nvidia-gpu-exporter"
+fi
+
+# Remove auto-start symlink
+if [ -L "/usr/local/etc/rc.d/rc.nvidia-gpu-exporter" ]; then
+    rm -f "/usr/local/etc/rc.d/rc.nvidia-gpu-exporter"
+    echo "Removed auto-start symlink"
+fi
+
+# Remove plugin directory
+if [ -d "/usr/local/emhttp/plugins/nvidia-gpu-exporter" ]; then
+    rm -rf "/usr/local/emhttp/plugins/nvidia-gpu-exporter"
+    echo "Removed plugin directory"
+fi
+
+# Remove log file
+if [ -f "/var/log/nvidia-gpu-exporter.log" ]; then
+    rm -f "/var/log/nvidia-gpu-exporter.log"
+    echo "Removed log file: /var/log/nvidia-gpu-exporter.log"
+fi
+
+echo "NVIDIA GPU Exporter plugin uninstalled successfully"
+]]>
+</INLINE>
+</FILE>
+
+</PLUGIN>

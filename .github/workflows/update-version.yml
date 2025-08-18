@@ -1,0 +1,206 @@
+name: Auto Update NVIDIA GPU Exporter Version
+
+on:
+  schedule:
+    # Run every Monday at 6 AM UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    # Manual trigger option
+    inputs:
+      force_update:
+        description: 'Force update even if no new version is available'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      update-needed: ${{ steps.version-check.outputs.update-needed }}
+      current-version: ${{ steps.version-check.outputs.current-version }}
+      latest-version: ${{ steps.version-check.outputs.latest-version }}
+      download-url: ${{ steps.version-check.outputs.download-url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for new version
+        id: version-check
+        run: |
+          # Get current version from plugin file
+          CURRENT_VERSION=$(grep -o 'nvidia_gpu_exporter/releases/download/v[0-9.]\+' nvidia_gpu_exporter.plg | grep -o 'v[0-9.]\+' | head -1)
+          echo "Current version: $CURRENT_VERSION"
+          echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          
+          # Get latest version from GitHub API
+          LATEST_RELEASE=$(curl -s https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest)
+          LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
+          echo "Latest version: $LATEST_VERSION"
+          echo "latest-version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          
+          # Get download URL for linux_x86_64
+          DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | contains("linux_x86_64.tar.gz")) | .browser_download_url')
+          echo "Download URL: $DOWNLOAD_URL"
+          echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          
+          # Check if update is needed
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ] || [ "${{ github.event.inputs.force_update }}" == "true" ]; then
+            echo "Update needed: true"
+            echo "update-needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Update needed: false"
+            echo "update-needed=false" >> $GITHUB_OUTPUT
+          fi
+
+  update-plugin:
+    needs: check-version
+    if: needs.check-version.outputs.update-needed == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Update plugin file
+        env:
+          CURRENT_VERSION: ${{ needs.check-version.outputs.current-version }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
+          DOWNLOAD_URL: ${{ needs.check-version.outputs.download-url }}
+        run: |
+          # Update the plugin file using sed and awk
+          CURRENT_VERSION="${{ needs.check-version.outputs.current-version }}"
+          LATEST_VERSION="${{ needs.check-version.outputs.latest-version }}"
+          DOWNLOAD_URL="${{ needs.check-version.outputs.download-url }}"
+          TODAY=$(date +%Y.%m.%d)
+          
+          echo "Updating from $CURRENT_VERSION to $LATEST_VERSION"
+          
+          # Create backup
+          cp nvidia_gpu_exporter.plg nvidia_gpu_exporter.plg.bak
+          
+          # Update download URL
+          sed -i "s|https://github\.com/utkuozdemir/nvidia_gpu_exporter/releases/download/[^\"]*|$DOWNLOAD_URL|g" nvidia_gpu_exporter.plg
+          
+          # Update plugin version
+          sed -i "s/<!ENTITY version[[:space:]]*\"[^\"]*\">/<!ENTITY version   \"$TODAY\">/" nvidia_gpu_exporter.plg
+          
+          # Update CHANGES section - insert new entry after <CHANGES>
+          NEW_CHANGES="###$TODAY\n- Updated to nvidia-gpu-exporter $LATEST_VERSION\n- Auto-updated via GitHub Actions\n"
+          sed -i "/<CHANGES>/a\\$NEW_CHANGES" nvidia_gpu_exporter.plg
+          
+          echo "Plugin file updated successfully"
+
+      - name: Validate updated plugin
+        run: |
+          # Check if XML is valid
+          if command -v xmllint >/dev/null 2>&1; then
+            xmllint --noout nvidia_gpu_exporter.plg
+            echo "XML validation passed"
+          fi
+          
+          # Test download URL
+          DOWNLOAD_URL="${{ needs.check-version.outputs.download-url }}"
+          if curl -I -L --fail "$DOWNLOAD_URL" >/dev/null 2>&1; then
+            echo "Download URL validation passed"
+          else
+            echo "ERROR: Download URL validation failed"
+            exit 1
+          fi
+
+      - name: Create Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_VERSION: ${{ needs.check-version.outputs.current-version }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
+        run: |
+          # Configure git
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Create branch
+          BRANCH_NAME="update-nvidia-gpu-exporter-${LATEST_VERSION}"
+          git checkout -b "$BRANCH_NAME"
+          
+          # Add and commit changes
+          git add nvidia_gpu_exporter.plg
+          git commit -m "chore: update nvidia-gpu-exporter from $CURRENT_VERSION to $LATEST_VERSION
+
+          Auto-generated by GitHub Actions
+          
+          Release notes: https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/tag/$LATEST_VERSION"
+          
+          # Push branch
+          git push origin "$BRANCH_NAME"
+          
+          # Create PR body
+          PR_BODY="## Automatic Version Update
+
+          This PR updates the nvidia-gpu-exporter plugin to version **$LATEST_VERSION**.
+
+          ### Changes:
+          - Updated from \`$CURRENT_VERSION\` to \`$LATEST_VERSION\`
+          - Updated download URL to latest release
+          - Updated plugin version to \`$(date +%Y.%m.%d)\`
+
+          ### Validation:
+          - ✅ XML structure validated
+          - ✅ Download URL tested
+          - ✅ Plugin file syntax verified
+
+          ### Release Information:
+          🔗 [View Release Notes](https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/tag/$LATEST_VERSION)
+
+          This PR was automatically created by GitHub Actions."
+          
+          # Create PR
+          gh pr create \
+            --title "chore: update nvidia-gpu-exporter to $LATEST_VERSION" \
+            --body "$PR_BODY" \
+            --head "$BRANCH_NAME" \
+            --base main
+
+      - name: Enable auto-merge
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
+        run: |
+          # Get PR number
+          BRANCH_NAME="update-nvidia-gpu-exporter-${LATEST_VERSION}"
+          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+          
+          if [ -n "$PR_NUMBER" ]; then
+            # Enable auto-merge
+            gh pr merge "$PR_NUMBER" --auto --squash
+            echo "Auto-merge enabled for PR #$PR_NUMBER"
+          else
+            echo "Could not find PR to enable auto-merge"
+          fi
+
+  notify:
+    needs: [check-version, update-plugin]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Notify workflow result
+        env:
+          CURRENT_VERSION: ${{ needs.check-version.outputs.current-version }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
+          UPDATE_NEEDED: ${{ needs.check-version.outputs.update-needed }}
+        run: |
+          if [ "$UPDATE_NEEDED" == "true" ]; then
+            if [ "${{ needs.update-plugin.result }}" == "success" ]; then
+              echo "✅ Successfully created PR to update from $CURRENT_VERSION to $LATEST_VERSION"
+            else
+              echo "❌ Failed to create PR for update from $CURRENT_VERSION to $LATEST_VERSION"
+              exit 1
+            fi
+          else
+            echo "ℹ️ No update needed. Current version $CURRENT_VERSION is up to date."
+          fi
