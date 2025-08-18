@@ -89,76 +89,226 @@ Icon="nvidia_exporter.png"
 ---
 <?PHP
 $plugin = "nvidia-gpu-exporter";
-$docroot = "/usr/local/emhttp/plugins/$plugin";
-$translations = file_exists("$docroot/languages/" . $_SESSION['locale'] . ".txt") ? "$docroot/languages/" . $_SESSION['locale'] . ".txt" : "$docroot/languages/en_US.txt";
-if (file_exists($translations)) {
-  extract(parse_ini_file($translations, true));
+$config_file = "/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg";
+
+// Default configuration
+$default_cfg = [
+    'SERVICE' => 'disable',
+    'PORT' => '9835',
+    'AUTOSTART' => 'yes',
+    'EXTRA_ARGS' => ''
+];
+
+// Load configuration
+if (file_exists($config_file)) {
+    $cfg = parse_ini_file($config_file) ?: $default_cfg;
+} else {
+    $cfg = $default_cfg;
 }
+
+// Merge with defaults to ensure all keys exist
+$cfg = array_merge($default_cfg, $cfg);
+
+// Validation functions
+function validate_port($port) {
+    return is_numeric($port) && $port >= 1024 && $port <= 65535;
+}
+
+function is_port_in_use($port) {
+    $connection = @fsockopen('127.0.0.1', $port, $errno, $errstr, 1);
+    if ($connection) {
+        fclose($connection);
+        return true;
+    }
+    return false;
+}
+
+function check_nvidia_smi() {
+    exec('which nvidia-smi', $output, $return_code);
+    return $return_code === 0;
+}
+
+function check_nvidia_gpu() {
+    exec('nvidia-smi -L 2>/dev/null', $output, $return_code);
+    return $return_code === 0 && count($output) > 0;
+}
+
+// Status checks
+$nvidia_smi_available = check_nvidia_smi();
+$nvidia_gpu_available = check_nvidia_gpu();
+$port_valid = validate_port($cfg['PORT']);
+$port_in_use = is_port_in_use($cfg['PORT']);
+$service_running = exec('pgrep -f "nvidia-gpu-exporter" 2>/dev/null') !== '';
 ?>
 
-<link type="text/css" rel="stylesheet" href="<?=$docroot;?>/nvidia-gpu-exporter.css">
+<link type="text/css" rel="stylesheet" href="/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.css">
 
 <div id="title">
   <span class="left">
-    <img src="<?=$docroot;?>/nvidia_exporter.png" class="icon">
-    <?=_("NVIDIA GPU Exporter")?>
+    <img src="/plugins/nvidia-gpu-exporter/nvidia_exporter.png" class="icon">
+    NVIDIA GPU Exporter
   </span>
 </div>
 
-<form markdown="1" method="POST" action="/update.php" target="progressFrame">
-<input type="hidden" name="#file" value="<?=$plugin;?>/nvidia-gpu-exporter.cfg">
+<!-- Prerequisites Check -->
+<div class="prerequisites">
+  <h3>System Requirements</h3>
+  <div class="status-item">
+    <span class="status-label">NVIDIA SMI Available:</span>
+    <span class="status-value <?= $nvidia_smi_available ? 'status-ok' : 'status-error' ?>">
+      <?= $nvidia_smi_available ? '✓ Available' : '✗ Not Found' ?>
+    </span>
+  </div>
+  <div class="status-item">
+    <span class="status-label">NVIDIA GPU Detected:</span>
+    <span class="status-value <?= $nvidia_gpu_available ? 'status-ok' : 'status-error' ?>">
+      <?= $nvidia_gpu_available ? '✓ Detected' : '✗ Not Found' ?>
+    </span>
+  </div>
+  <?php if (!$nvidia_smi_available || !$nvidia_gpu_available): ?>
+  <div class="warning">
+    <strong>Warning:</strong> NVIDIA drivers and/or GPU not detected. Please install NVIDIA drivers before using this plugin.
+  </div>
+  <?php endif; ?>
+</div>
 
-<?
-$cfg = parse_ini_file("/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg");
-$service = isset($cfg['SERVICE']) ? $cfg['SERVICE'] : 'disable';
-$port = isset($cfg['PORT']) ? $cfg['PORT'] : '9835';
-$runas = isset($cfg['RUNAS']) ? $cfg['RUNAS'] : 'root';
-?>
+<form markdown="1" method="POST" action="/update.php" target="progressFrame" onsubmit="return validateForm();">
+<input type="hidden" name="#file" value="nvidia-gpu-exporter/nvidia-gpu-exporter.cfg">
 
-**NVIDIA GPU Exporter Service:**
-: <select name="SERVICE" size="1" onChange="checkRunning(this.form);">
-  <?=mk_option($service, "disable", "Disabled");?>
-  <?=mk_option($service, "enable", "Enabled");?>
+<h3>Service Configuration</h3>
+
+**Service Status:**
+: <select name="SERVICE" id="service" size="1" onChange="toggleServiceOptions(); checkRunning(this.form);">
+  <?=mk_option($cfg['SERVICE'], "disable", "Disabled");?>
+  <?=mk_option($cfg['SERVICE'], "enable", "Enabled");?>
   </select>
+
+<div id="service-options" style="<?= $cfg['SERVICE'] === 'disable' ? 'display: none;' : '' ?>">
 
 **Port:**
-: <input type="number" name="PORT" min="1024" max="65535" value="<?=$port;?>" placeholder="9835" required>
+: <input type="number" name="PORT" id="port" min="1024" max="65535" value="<?=$cfg['PORT'];?>" placeholder="9835" required>
+  <span id="port-status"></span>
+  <br><small>Port range: 1024-65535. Default: 9835</small>
 
-**Run As:**
-: <select name="RUNAS" size="1">
-  <?=mk_option($runas, "root", "root");?>
+**Auto-start on Boot:**
+: <select name="AUTOSTART" size="1">
+  <?=mk_option($cfg['AUTOSTART'], "yes", "Yes");?>
+  <?=mk_option($cfg['AUTOSTART'], "no", "No");?>
   </select>
 
+**Additional Arguments:**
+: <input type="text" name="EXTRA_ARGS" value="<?=htmlspecialchars($cfg['EXTRA_ARGS']);?>" placeholder="--log.level=debug" style="width: 300px;">
+  <br><small>Optional command line arguments for nvidia-gpu-exporter</small>
+
+</div>
+
 <br>
-<input type="submit" name="#apply" value="Apply"><input type="button" value="Done" onclick="done()">
+<input type="submit" name="#apply" value="Apply" id="apply-btn">
+<input type="button" value="Start" onclick="serviceAction('start')" id="start-btn">
+<input type="button" value="Stop" onclick="serviceAction('stop')" id="stop-btn">
+<input type="button" value="Restart" onclick="serviceAction('restart')" id="restart-btn">
+<input type="button" value="Done" onclick="done()">
 </form>
 
 <div id="status"></div>
 
 <script>
-function checkRunning(form) {
-  if (form.SERVICE.value == "enable") {
-    $("#status").load("/plugins/nvidia-gpu-exporter/scripts/start", function() {
-      setTimeout(function() {
-        $("#status").load("/plugins/nvidia-gpu-exporter/scripts/status");
-      }, 2000);
-    });
-  } else {
-    $("#status").load("/plugins/nvidia-gpu-exporter/scripts/stop", function() {
-      setTimeout(function() {
-        $("#status").load("/plugins/nvidia-gpu-exporter/scripts/status");
-      }, 2000);
-    });
-  }
+function validateForm() {
+    const port = document.getElementById('port').value;
+    const service = document.getElementById('service').value;
+    
+    if (service === 'enable') {
+        if (!port || port < 1024 || port > 65535) {
+            alert('Please enter a valid port number (1024-65535)');
+            return false;
+        }
+    }
+    
+    return true;
 }
 
-$(function() {
-  $("#status").load("/plugins/nvidia-gpu-exporter/scripts/status");
-});
+function toggleServiceOptions() {
+    const service = document.getElementById('service').value;
+    const options = document.getElementById('service-options');
+    
+    if (service === 'enable') {
+        options.style.display = 'block';
+    } else {
+        options.style.display = 'none';
+    }
+}
+
+function checkPortAvailability() {
+    const port = document.getElementById('port').value;
+    const status = document.getElementById('port-status');
+    
+    if (port && port >= 1024 && port <= 65535) {
+        $.post('/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.php', {
+            action: 'check_port',
+            port: port
+        }, function(data) {
+            if (data.includes('available')) {
+                status.innerHTML = '<span class="status-ok">✓ Available</span>';
+            } else {
+                status.innerHTML = '<span class="status-error">✗ In use</span>';
+            }
+        });
+    } else {
+        status.innerHTML = '<span class="status-error">✗ Invalid</span>';
+    }
+}
+
+function serviceAction(action) {
+    $("#status").html('<div class="loading">Processing...</div>');
+    $.post('/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.php', {
+        action: action
+    }, function(data) {
+        $("#status").html(data);
+        setTimeout(function() {
+            loadStatus();
+        }, 2000);
+    });
+}
+
+function checkRunning(form) {
+    if (form.SERVICE.value == "enable") {
+        setTimeout(function() {
+            serviceAction('start');
+        }, 1000);
+    } else {
+        serviceAction('stop');
+    }
+}
+
+function loadStatus() {
+    $.post('/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.php', {
+        action: 'status'
+    }, function(data) {
+        $("#status").html(data);
+    });
+}
 
 function done() {
-  window.location.href = '/Settings';
+    window.location.href = '/Settings';
 }
+
+$(document).ready(function() {
+    loadStatus();
+    
+    // Check port availability on change
+    $('#port').on('input', function() {
+        clearTimeout(this.delay);
+        this.delay = setTimeout(function() {
+            checkPortAvailability();
+        }.bind(this), 500);
+    });
+    
+    // Initial port check
+    checkPortAvailability();
+    
+    // Toggle service options based on current selection
+    toggleServiceOptions();
+});
 </script>
 ]]>
 </INLINE>
@@ -172,25 +322,142 @@ Install PHP backend script
 <![CDATA[
 <?PHP
 $plugin = "nvidia-gpu-exporter";
-$docroot = "/usr/local/emhttp/plugins/$plugin";
+$config_file = "/boot/config/plugins/$plugin/nvidia-gpu-exporter.cfg";
+$log_file = "/var/log/nvidia-gpu-exporter.log";
+$binary_path = "/usr/local/bin/nvidia-gpu-exporter";
 
-switch ($_POST['action']) {
-  case 'start':
-    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/start 2>&1");
-    break;
-  case 'stop':
-    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/stop 2>&1");
-    break;
-  case 'restart':
-    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/stop 2>&1");
-    sleep(1);
-    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/start 2>&1");
-    break;
-  case 'status':
-    echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/status 2>&1");
-    break;
-  default:
-    echo "Invalid action";
+// Helper functions
+function load_config() {
+    global $config_file;
+    $default_cfg = [
+        'SERVICE' => 'disable',
+        'PORT' => '9835',
+        'AUTOSTART' => 'yes',
+        'EXTRA_ARGS' => ''
+    ];
+    
+    if (file_exists($config_file)) {
+        $cfg = parse_ini_file($config_file) ?: $default_cfg;
+    } else {
+        $cfg = $default_cfg;
+    }
+    
+    return array_merge($default_cfg, $cfg);
+}
+
+function validate_port($port) {
+    return is_numeric($port) && $port >= 1024 && $port <= 65535;
+}
+
+function is_port_in_use($port) {
+    $connection = @fsockopen('127.0.0.1', $port, $errno, $errstr, 1);
+    if ($connection) {
+        fclose($connection);
+        return true;
+    }
+    return false;
+}
+
+function get_service_pid() {
+    $pid = exec('pgrep -f "nvidia-gpu-exporter" 2>/dev/null');
+    return $pid ? intval($pid) : 0;
+}
+
+function is_service_running() {
+    return get_service_pid() > 0;
+}
+
+function get_service_status() {
+    global $log_file;
+    $cfg = load_config();
+    $pid = get_service_pid();
+    $running = $pid > 0;
+    
+    $status_html = "<div class='status-container'>";
+    
+    if ($running) {
+        $status_html .= "<div class='status-item'><span class='status-label'>Status:</span> <span class='status-ok'>✓ Running</span></div>";
+        $status_html .= "<div class='status-item'><span class='status-label'>PID:</span> <span class='status-value'>$pid</span></div>";
+        $status_html .= "<div class='status-item'><span class='status-label'>Port:</span> <span class='status-value'>{$cfg['PORT']}</span></div>";
+        
+        $hostname = gethostname();
+        $metrics_url = "http://$hostname:{$cfg['PORT']}/metrics";
+        $status_html .= "<div class='status-item'><span class='status-label'>Metrics URL:</span> <span class='status-value'><a href='$metrics_url' target='_blank'>$metrics_url</a></span></div>";
+        
+        // Test connectivity
+        $connection = @fsockopen('127.0.0.1', $cfg['PORT'], $errno, $errstr, 3);
+        if ($connection) {
+            fclose($connection);
+            $status_html .= "<div class='status-item'><span class='status-label'>Connectivity:</span> <span class='status-ok'>✓ Responding</span></div>";
+        } else {
+            $status_html .= "<div class='status-item'><span class='status-label'>Connectivity:</span> <span class='status-error'>✗ Not responding</span></div>";
+        }
+    } else {
+        $status_html .= "<div class='status-item'><span class='status-label'>Status:</span> <span class='status-error'>✗ Not running</span></div>";
+    }
+    
+    $status_html .= "</div>";
+    
+    // Show recent log entries
+    if (file_exists($log_file)) {
+        $log_lines = array_slice(file($log_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES), -10);
+        if (!empty($log_lines)) {
+            $status_html .= "<div class='log-container'>";
+            $status_html .= "<h4>Recent Log Entries:</h4>";
+            $status_html .= "<pre class='log-content'>";
+            foreach ($log_lines as $line) {
+                $status_html .= htmlspecialchars($line) . "\n";
+            }
+            $status_html .= "</pre>";
+            $status_html .= "</div>";
+        }
+    }
+    
+    return $status_html;
+}
+
+// Handle AJAX requests
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = $_POST['action'] ?? '';
+    
+    switch ($action) {
+        case 'start':
+            echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/start 2>&1");
+            break;
+            
+        case 'stop':
+            echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/stop 2>&1");
+            break;
+            
+        case 'restart':
+            echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/stop 2>&1");
+            sleep(1);
+            echo shell_exec("/usr/local/emhttp/plugins/$plugin/scripts/start 2>&1");
+            break;
+            
+        case 'status':
+            echo get_service_status();
+            break;
+            
+        case 'check_port':
+            $port = $_POST['port'] ?? '';
+            if (validate_port($port)) {
+                if (is_port_in_use($port)) {
+                    echo "Port $port is in use";
+                } else {
+                    echo "Port $port is available";
+                }
+            } else {
+                echo "Invalid port";
+            }
+            break;
+            
+        default:
+            echo "Invalid action: $action";
+    }
+} else {
+    // Default response for non-POST requests
+    echo get_service_status();
 }
 ?>
 ]]>
