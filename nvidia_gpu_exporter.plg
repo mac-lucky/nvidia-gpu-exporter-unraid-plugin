@@ -8,7 +8,7 @@
 <!ENTITY gitURL    "https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-plugin/main">
 <!ENTITY pluginURL "&gitURL;/nvidia_gpu_exporter.plg">
 <!ENTITY exporterVersion "1.3.2">
-<!ENTITY exporterURL "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&exporterVersion;/nvidia_gpu_exporter_v&exporterVersion;_linux_amd64.tar.gz">
+<!ENTITY exporterURL "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v&exporterVersion;/nvidia_gpu_exporter_&exporterVersion;_linux_x86_64.tar.gz">
 <!ENTITY packages  "/boot/config/plugins/&name;/packages">
 <!ENTITY plugin    "/boot/config/plugins/&name;">
 <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
@@ -41,7 +41,7 @@ rm -rf &plugin; &emhttp;
 <!--
 Download and install nvidia-gpu-exporter binary
 -->
-<FILE Name="&packages;/nvidia-gpu-exporter-v&exporterVersion;.tar.gz" Run="upgradepkg --install-new">
+<FILE Name="&packages;/nvidia-gpu-exporter-&exporterVersion;.tar.gz" Run="upgradepkg --install-new">
 <URL>&exporterURL;</URL>
 </FILE>
 
@@ -57,7 +57,7 @@ mkdir -p /usr/local/bin
 
 # Extract the binary
 cd /tmp
-tar -xzf &packages;/nvidia-gpu-exporter-v&exporterVersion;.tar.gz
+tar -xzf &packages;/nvidia-gpu-exporter-&exporterVersion;.tar.gz
 cp nvidia_gpu_exporter /usr/local/bin/nvidia-gpu-exporter
 chmod +x /usr/local/bin/nvidia-gpu-exporter
 
