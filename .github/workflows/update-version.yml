@@ -12,6 +12,14 @@ on:
         required: false
         default: false
         type: boolean
+  push:
+    # Run when the workflow itself is modified
+    paths:
+      - '.github/workflows/update-version.yml'
+  pull_request:
+    # Run on PRs that modify the workflow
+    paths:
+      - '.github/workflows/update-version.yml'
 
 permissions:
   contents: write
@@ -165,7 +173,7 @@ jobs:
             --head "$BRANCH_NAME" \
             --base main
 
-      - name: Enable auto-merge
+      - name: Enable auto-merge and auto-delete branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
@@ -175,9 +183,9 @@ jobs:
           PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
           
           if [ -n "$PR_NUMBER" ]; then
-            # Enable auto-merge
-            gh pr merge "$PR_NUMBER" --auto --squash
-            echo "Auto-merge enabled for PR #$PR_NUMBER"
+            # Enable auto-merge with squash (this will auto-delete the branch)
+            gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
+            echo "Auto-merge enabled for PR #$PR_NUMBER with auto-delete branch"
           else
             echo "Could not find PR to enable auto-merge"
           fi
