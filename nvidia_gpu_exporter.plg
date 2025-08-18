@@ -485,12 +485,25 @@ if [ "$SERVICE" = "enable" ]; then
     echo "NVIDIA GPU Exporter is already running"
   else
     echo "Starting NVIDIA GPU Exporter on port $PORT..."
-    nohup /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" $EXTRA_ARGS > /var/log/nvidia-gpu-exporter.log 2>&1 &
-    sleep 2
+    
+    # Ensure binary is executable
+    chmod +x /usr/local/bin/nvidia-gpu-exporter
+    
+    # Set PATH and start service with full environment
+    export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/sbin
+    cd /tmp
+    
+    # Start the service with proper environment
+    /usr/local/bin/nvidia-gpu-exporter --web.listen-address=":$PORT" $EXTRA_ARGS > /var/log/nvidia-gpu-exporter.log 2>&1 &
+    
+    sleep 3
     if pgrep -f "nvidia-gpu-exporter" > /dev/null; then
       echo "NVIDIA GPU Exporter started successfully"
+      echo "PID: $(pgrep -f nvidia-gpu-exporter)"
+      echo "Log: $(tail -2 /var/log/nvidia-gpu-exporter.log)"
     else
       echo "Failed to start NVIDIA GPU Exporter"
+      echo "Error log:"
       cat /var/log/nvidia-gpu-exporter.log
     fi
   fi
@@ -550,12 +563,7 @@ Install CSS for web interface
 -->
 <FILE Name="&emhttp;/nvidia-gpu-exporter.css">
 <INLINE>
-/* Dark theme for NVIDIA GPU Exporter */
-body, .content {
-  background-color: #1a1a1a;
-  color: #e0e0e0;
-}
-
+/* High contrast dark theme for NVIDIA GPU Exporter */
 .icon {
   width: 32px;
   height: 32px;
@@ -567,82 +575,82 @@ body, .content {
   margin-bottom: 20px;
   font-size: 18px;
   font-weight: bold;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 #status {
   margin-top: 20px;
   padding: 15px;
-  border: 1px solid #444;
+  border: 1px solid #666;
   border-radius: 5px;
-  background-color: #2a2a2a;
-  color: #e0e0e0;
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
 }
 
 .prerequisites {
   margin-bottom: 20px;
   padding: 15px;
-  border: 1px solid #444;
+  border: 1px solid #666;
   border-radius: 5px;
-  background-color: #2a2a2a;
-  color: #e0e0e0;
+  background-color: #1a1a1a !important;
+  color: #ffffff !important;
 }
 
 .prerequisites h3 {
   margin-top: 0;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .status-item {
   margin: 8px 0;
   display: flex;
   align-items: center;
-  color: #e0e0e0;
+  color: #ffffff !important;
 }
 
 .status-label {
   font-weight: bold;
   min-width: 180px;
   margin-right: 10px;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .status-value {
-  color: #cccccc;
+  color: #dddddd !important;
 }
 
 .status-ok {
-  color: #28a745;
+  color: #00ff00 !important;
   font-weight: bold;
 }
 
 .status-error {
-  color: #dc3545;
+  color: #ff4444 !important;
   font-weight: bold;
 }
 
 .warning {
-  background-color: #332a00;
-  border: 1px solid #665500;
-  color: #ffcc00;
+  background-color: #333300 !important;
+  border: 1px solid #666600 !important;
+  color: #ffff00 !important;
   padding: 10px;
   border-radius: 4px;
   margin-top: 10px;
 }
 
 .error {
-  background-color: #330a0a;
-  border: 1px solid #661515;
-  color: #ff6666;
+  background-color: #330000 !important;
+  border: 1px solid #660000 !important;
+  color: #ff6666 !important;
   padding: 10px;
   border-radius: 4px;
   margin: 10px 0;
 }
 
 .success {
-  background-color: #0a330a;
-  border: 1px solid #156615;
-  color: #66ff66;
+  background-color: #003300 !important;
+  border: 1px solid #006600 !important;
+  color: #66ff66 !important;
   padding: 10px;
   border-radius: 4px;
   margin: 10px 0;
@@ -650,16 +658,17 @@ body, .content {
 
 .loading {
   text-align: center;
-  color: #cccccc;
+  color: #ffffff !important;
   font-style: italic;
 }
 
 .status-container {
   margin-bottom: 15px;
-  background-color: #2a2a2a;
+  background-color: #1a1a1a !important;
   padding: 10px;
   border-radius: 5px;
-  border: 1px solid #444;
+  border: 1px solid #666;
+  color: #ffffff !important;
 }
 
 .log-container {
@@ -668,36 +677,36 @@ body, .content {
 
 .log-container h4 {
   margin-bottom: 10px;
-  color: #ffffff;
+  color: #ffffff !important;
 }
 
 .log-content {
-  background: #1a1a1a;
-  border: 1px solid #444;
+  background: #000000 !important;
+  border: 1px solid #666;
   padding: 10px;
   font-size: 12px;
   max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
   font-family: 'Courier New', monospace;
-  color: #e0e0e0;
+  color: #00ff00 !important;
 }
 
 #service-options {
   margin-top: 15px;
   padding: 15px;
-  background-color: #2a2a2a;
-  border: 1px solid #444;
+  background-color: #1a1a1a !important;
+  border: 1px solid #666;
   border-radius: 5px;
-  color: #e0e0e0;
+  color: #ffffff !important;
 }
 
 input[type="number"], input[type="text"], select {
   padding: 5px;
-  border: 1px solid #555;
+  border: 1px solid #666 !important;
   border-radius: 3px;
-  background-color: #333;
-  color: #e0e0e0;
+  background-color: #000000 !important;
+  color: #ffffff !important;
 }
 
 input[type="submit"], input[type="button"] {
@@ -706,15 +715,15 @@ input[type="submit"], input[type="button"] {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: white;
+  color: #ffffff !important;
 }
 
 input[type="submit"] {
-  background-color: #007bff;
+  background-color: #0066cc !important;
 }
 
 input[type="button"] {
-  background-color: #6c757d;
+  background-color: #666666 !important;
 }
 
 input[type="submit"]:hover, input[type="button"]:hover {
@@ -724,11 +733,16 @@ input[type="submit"]:hover, input[type="button"]:hover {
 #port-status {
   margin-left: 10px;
   font-size: 12px;
+  color: #ffffff !important;
 }
 
-/* Dark theme overrides for Unraid */
-form, form *, small {
-  color: #e0e0e0 !important;
+/* Universal text visibility overrides for Unraid */
+*, *::before, *::after {
+  color: #ffffff !important;
+}
+
+form *, dt, dd, small, span, div, p, td, th, label {
+  color: #ffffff !important;
 }
 
 strong, b {
@@ -741,6 +755,11 @@ a {
 
 a:hover {
   color: #99ddff !important;
+}
+
+/* Force visibility for all text elements */
+.content *, .panel *, .section * {
+  color: #ffffff !important;
 }
 </INLINE>
 </FILE>
