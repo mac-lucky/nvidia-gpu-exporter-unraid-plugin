@@ -41,7 +41,7 @@ rm -rf &plugin; &emhttp;
 <!--
 Download and install nvidia-gpu-exporter binary
 -->
-<FILE Name="&packages;/nvidia-gpu-exporter-&exporterVersion;.tar.gz" Run="upgradepkg --install-new">
+<FILE Name="&packages;/nvidia-gpu-exporter-&exporterVersion;.tar.gz">
 <URL>&exporterURL;</URL>
 </FILE>
 
