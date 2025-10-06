@@ -3,16 +3,20 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2025.08.18">
+<!ENTITY version   "2025.10.06">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
-<!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz">
+<!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.4.0/nvidia_gpu_exporter_1.4.0_linux_x86_64.tar.gz">
 <!ENTITY md5       "auto">
 ]>
 
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="&gitURL;" icon="nvidia_exporter.png" iconURL="&gitURL;/raw/main/nvidia_exporter.png">
 
 <CHANGES>
+###2025.10.06
+- Updated to nvidia-gpu-exporter v1.4.0
+- Auto-updated via GitHub Actions
+
 ###2025.08.18
 - Updated to nvidia-gpu-exporter v1.3.2
 - Auto-updated via GitHub Actions
@@ -42,7 +46,7 @@ The service runs on port 9835 by default and logs to /var/log/nvidia-gpu-exporte
 echo "Installing NVIDIA GPU Exporter..."
 
 # Set variables
-DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.3.2/nvidia_gpu_exporter_1.3.2_linux_x86_64.tar.gz"
+DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.4.0/nvidia_gpu_exporter_1.4.0_linux_x86_64.tar.gz"
 TEMP_DIR="/tmp/nvidia-gpu-exporter-install"
 BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
 LOG_FILE="/var/log/nvidia-gpu-exporter.log"
