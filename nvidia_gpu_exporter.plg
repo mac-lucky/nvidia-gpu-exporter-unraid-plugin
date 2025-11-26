@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2025.10.13">
+<!ENTITY version   "2025.11.27">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
 <!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.4.1/nvidia_gpu_exporter_1.4.1_linux_x86_64.tar.gz">
@@ -13,6 +13,10 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="&gitURL;" icon="nvidia_exporter.png" iconURL="&gitURL;/raw/main/nvidia_exporter.png">
 
 <CHANGES>
+###2025.11.27
+- Fixed control script process detection (changed from pgrep -x to pgrep -f)
+- Service status now correctly detects running processes
+
 ###2025.10.13
 - Updated to nvidia-gpu-exporter v1.4.1
 - Auto-updated via GitHub Actions
@@ -252,13 +256,13 @@ LOG_FILE="/var/log/nvidia-gpu-exporter.log"
 # Function to start the service
 start_service() {
     if [ -f "$BINARY_PATH" ]; then
-        # Check if already running
-        if ! pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
+        # Check if already running (check both process names - binary uses underscore)
+        if ! pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
             echo "$(date): Starting NVIDIA GPU Exporter..." >> "$LOG_FILE"
             nohup "$BINARY_PATH" >> "$LOG_FILE" 2>&1 &
             sleep 3
-            if pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
-                PID=$(pgrep -x "nvidia-gpu-exporter")
+            if pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
+                PID=$(pgrep -f "$BINARY_PATH")
                 echo "$(date): NVIDIA GPU Exporter started with PID: $PID" >> "$LOG_FILE"
                 echo "NVIDIA GPU Exporter started with PID: $PID"
             else
@@ -267,7 +271,7 @@ start_service() {
                 return 1
             fi
         else
-            PID=$(pgrep -x "nvidia-gpu-exporter")
+            PID=$(pgrep -f "$BINARY_PATH")
             echo "$(date): NVIDIA GPU Exporter already running with PID: $PID" >> "$LOG_FILE"
             echo "NVIDIA GPU Exporter already running with PID: $PID"
         fi
@@ -280,12 +284,12 @@ start_service() {
 
 # Function to stop the service
 stop_service() {
-    if pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
+    if pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
         echo "$(date): Stopping NVIDIA GPU Exporter..." >> "$LOG_FILE"
         echo "Stopping NVIDIA GPU Exporter..."
         
         # Get all PIDs
-        PIDS=$(pgrep -x "nvidia-gpu-exporter")
+        PIDS=$(pgrep -f "$BINARY_PATH")
         echo "Found PIDs: $PIDS"
         
         # Kill all processes
@@ -297,15 +301,15 @@ stop_service() {
         sleep 3
         
         # Check if any are still running
-        if pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
+        if pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
             echo "$(date): Force killing remaining NVIDIA GPU Exporter processes..." >> "$LOG_FILE"
             echo "Force killing remaining processes..."
-            pkill -9 -x "nvidia-gpu-exporter"
+            pkill -9 -f "$BINARY_PATH"
             sleep 2
         fi
         
         # Final check
-        if ! pgrep -x "nvidia-gpu-exporter" > /dev/null 2>&1; then
+        if ! pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
             echo "$(date): NVIDIA GPU Exporter stopped successfully" >> "$LOG_FILE"
             echo "NVIDIA GPU Exporter stopped successfully"
         else
@@ -321,7 +325,7 @@ stop_service() {
 
 # Function to check service status
 status_service() {
-    PIDS=$(pgrep -x "nvidia-gpu-exporter" 2>/dev/null)
+    PIDS=$(pgrep -f "$BINARY_PATH" 2>/dev/null)
     if [ -n "$PIDS" ]; then
         echo "NVIDIA GPU Exporter is running with PID(s): $PIDS"
         echo "Service is available on port 9835"
@@ -329,6 +333,12 @@ status_service() {
         # Check if port is actually listening
         if command -v netstat >/dev/null 2>&1; then
             if netstat -tuln 2>/dev/null | grep -q ":9835 "; then
+                echo "Port 9835 is listening"
+            else
+                echo "WARNING: Port 9835 is not listening"
+            fi
+        elif command -v ss >/dev/null 2>&1; then
+            if ss -tuln 2>/dev/null | grep -q ":9835 "; then
                 echo "Port 9835 is listening"
             else
                 echo "WARNING: Port 9835 is not listening"
