@@ -3,36 +3,44 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2026.07.06">
-<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-plugin">
+<!ENTITY version   "2026.07.06b">
+<!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
-<!ENTITY pkgURL    "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.10.0/nvidia_gpu_exporter_1.10.0_linux_x86_64.tar.gz">
-<!ENTITY md5       "auto">
+<!ENTITY supportURL "&gitURL;/issues">
 ]>
 
-<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;" support="&gitURL;" icon="nvidia_exporter.png" iconURL="&gitURL;/raw/main/nvidia_exporter.png">
+<PLUGIN name="&name;"
+        author="&author;"
+        version="&version;"
+        pluginURL="&pluginURL;"
+        support="&supportURL;"
+        icon="nvidia_exporter.png"
+        iconURL="&gitURL;/raw/main/src/nvidia_exporter.png"
+        launch="Settings/nvidia-gpu-exporter"
+        min="6.9">
 
 <CHANGES>
+###2026.07.06b
+- Add a settings page under Settings -> User Utilities -> NVIDIA GPU Exporter
+- Settings persist on the flash drive: listen port, auto-start, log level, nvidia-smi command, query fields, telemetry path
+- Cache the release tarball on the flash drive and verify its sha256, so the boot-time reinstall works without internet
+- One control script now owns start/stop/restart/status (drops the duplicated install-time start logic)
+- Replace changed plugin files on upgrade
 ###2026.07.06
 - Updated to nvidia-gpu-exporter v1.10.0
 - Auto-updated via GitHub Actions
-
 ###2025.11.27
 - Fixed control script process detection (changed from pgrep -x to pgrep -f)
 - Service status now correctly detects running processes
-
 ###2025.10.13
 - Updated to nvidia-gpu-exporter v1.4.1
 - Auto-updated via GitHub Actions
-
 ###2025.10.06
 - Updated to nvidia-gpu-exporter v1.4.0
 - Auto-updated via GitHub Actions
-
 ###2025.08.18
 - Updated to nvidia-gpu-exporter v1.3.2
 - Auto-updated via GitHub Actions
-
 ###2025.01.18
 - Initial release of NVIDIA GPU Exporter plugin
 - Downloads and installs nvidia-gpu-exporter v1.3.2
@@ -44,318 +52,217 @@
 
 <!--
 NVIDIA GPU Exporter Plugin for Unraid
-This plugin downloads, installs, and manages the nvidia-gpu-exporter service
-which exports NVIDIA GPU metrics for monitoring systems like Prometheus.
 
-The service runs on port 9835 by default and logs to /var/log/nvidia-gpu-exporter.log
+Installs and supervises utkuozdemir/nvidia_gpu_exporter, which exports NVIDIA
+GPU metrics in Prometheus format (port 9835 by default). Configure it under
+Settings -> User Utilities -> NVIDIA GPU Exporter.
+
+Plugin: https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin
 -->
 
-<!-- Download and install the nvidia-gpu-exporter binary -->
+<!-- 1. Seed/migrate persistent config on the flash drive (preserves existing values). -->
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-# Download and install nvidia-gpu-exporter
-echo "Installing NVIDIA GPU Exporter..."
+set -e
+CFG_DIR="/boot/config/plugins/nvidia-gpu-exporter"
+CFG_FILE="$CFG_DIR/nvidia-gpu-exporter.cfg"
+mkdir -p "$CFG_DIR"
+mkdir -p /usr/local/emhttp/plugins/nvidia-gpu-exporter
+touch "$CFG_FILE"
 
-# Set variables
-DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.10.0/nvidia_gpu_exporter_1.10.0_linux_x86_64.tar.gz"
-TEMP_DIR="/tmp/nvidia-gpu-exporter-install"
-BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
-LOG_FILE="/var/log/nvidia-gpu-exporter.log"
-
-# Create temp directory
-mkdir -p "$TEMP_DIR"
-cd "$TEMP_DIR"
-
-# Download the package
-echo "Downloading nvidia-gpu-exporter from GitHub..."
-echo "URL: $DOWNLOAD_URL"
-
-# Try wget with following redirects and user agent
-if wget --no-check-certificate --timeout=30 --tries=3 -L -U "Mozilla/5.0 (X11; Linux x86_64)" "$DOWNLOAD_URL" -O nvidia_gpu_exporter.tar.gz; then
-    echo "Download successful"
-    # Verify the file was downloaded and has content
-    if [ -s nvidia_gpu_exporter.tar.gz ]; then
-        echo "Downloaded file size: $(ls -lh nvidia_gpu_exporter.tar.gz | awk '{print $5}')"
-    else
-        echo "ERROR: Downloaded file is empty"
-        exit 1
-    fi
-else
-    echo "ERROR: Failed to download nvidia-gpu-exporter"
-    echo "Trying alternative download method with curl..."
-    if command -v curl >/dev/null 2>&1; then
-        if curl -L -k --retry 3 --retry-delay 2 -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64)" "$DOWNLOAD_URL" -o nvidia_gpu_exporter.tar.gz; then
-            echo "Download successful with curl"
-            if [ -s nvidia_gpu_exporter.tar.gz ]; then
-                echo "Downloaded file size: $(ls -lh nvidia_gpu_exporter.tar.gz | awk '{print $5}')"
-            else
-                echo "ERROR: Downloaded file is empty"
-                exit 1
-            fi
-        else
-            echo "ERROR: Both wget and curl failed to download the file"
-            exit 1
-        fi
-    else
-        echo "ERROR: curl not available as fallback"
-        exit 1
-    fi
-fi
-
-# Extract the package
-echo "Extracting package..."
-if tar -xzf nvidia_gpu_exporter.tar.gz; then
-    echo "Extraction successful"
-else
-    echo "ERROR: Failed to extract package"
-    exit 1
-fi
-
-# Find and move the binary
-BINARY_FILE=$(find . -name "nvidia_gpu_exporter" -type f)
-if [ -n "$BINARY_FILE" ]; then
-    echo "Installing binary to $BINARY_PATH..."
-    cp "$BINARY_FILE" "$BINARY_PATH"
-    chmod +x "$BINARY_PATH"
-    echo "Binary installed successfully"
-else
-    echo "ERROR: Could not find nvidia_gpu_exporter binary in package"
-    echo "Package contents:"
-    ls -la
-    exit 1
-fi
-
-# Cleanup temp directory
-cd /
-rm -rf "$TEMP_DIR"
-
-# Create log file
-touch "$LOG_FILE"
-chmod 644 "$LOG_FILE"
-
-echo "NVIDIA GPU Exporter installation completed"
-echo "Binary installed at: $BINARY_PATH"
-echo "Log file created at: $LOG_FILE"
+# Idempotently ensure every config key exists; existing values are preserved so
+# upgrades pick up new keys without clobbering user settings.
+ensure() { grep -q "^$1=" "$CFG_FILE" || printf '%s=%s\n' "$1" "$2" >> "$CFG_FILE"; }
+ensure LISTEN_PORT '"9835"'
+ensure AUTOSTART '"true"'
+ensure LOG_LEVEL '"info"'
+ensure NVIDIA_SMI_CMD '"nvidia-smi"'
+ensure QUERY_FIELDS '"AUTO"'
+ensure TELEMETRY_PATH '"/metrics"'
+chmod 644 "$CFG_FILE"
+echo "Config ready at $CFG_FILE"
 ]]>
 </INLINE>
 </FILE>
 
-<!-- Start the service -->
+<!-- 2. Download (or reuse cached), verify and install the exporter binary. -->
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-# Start nvidia-gpu-exporter service
-echo "Starting NVIDIA GPU Exporter service..."
+EXPORTER_VERSION="1.10.0"
+EXPORTER_SHA256="bb7c603d923beb57481652ac9848d1aa89da674b56ed99f99b6631418fbd9e56"
+DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.10.0/nvidia_gpu_exporter_1.10.0_linux_x86_64.tar.gz"
+# EXPORTER_VERSION, EXPORTER_SHA256 and DOWNLOAD_URL are prepended to this
+# script by build-plg.sh when the plg is assembled.
+# shellcheck disable=SC2154
+set -e
+echo "Installing NVIDIA GPU Exporter v${EXPORTER_VERSION}..."
 
+CACHE_DIR="/boot/config/plugins/nvidia-gpu-exporter"
+TARBALL="$CACHE_DIR/nvidia_gpu_exporter_${EXPORTER_VERSION}_linux_x86_64.tar.gz"
 BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
+TEMP_DIR="/tmp/nvidia-gpu-exporter-install"
 LOG_FILE="/var/log/nvidia-gpu-exporter.log"
 
-# Check if binary exists
-if [ ! -f "$BINARY_PATH" ]; then
-    echo "ERROR: nvidia-gpu-exporter binary not found at $BINARY_PATH"
-    exit 1
-fi
+mkdir -p "$CACHE_DIR"
 
-# Function to verify if PID is actually nvidia-gpu-exporter
-verify_pid() {
-    local pid=$1
-    if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
-        local cmdline=$(cat "/proc/$pid/cmdline" 2>/dev/null | tr '\0' ' ')
-        if echo "$cmdline" | grep -q "nvidia-gpu-exporter" && [ "$(readlink /proc/$pid/exe 2>/dev/null)" = "$BINARY_PATH" ]; then
-            return 0
+verify_tarball() { echo "$EXPORTER_SHA256  $1" | sha256sum -c - >/dev/null 2>&1; }
+
+# Reuse the tarball cached on the flash drive when it matches the pinned
+# checksum, so the boot-time reinstall works without internet access.
+if [ -s "$TARBALL" ] && verify_tarball "$TARBALL"; then
+    echo "Using cached tarball $TARBALL"
+else
+    rm -f "$TARBALL"
+    echo "Downloading $DOWNLOAD_URL"
+    if ! wget -q --timeout=30 --tries=3 -O "$TARBALL" "$DOWNLOAD_URL"; then
+        echo "wget failed, retrying with curl..."
+        if ! curl -fsSL --retry 3 --retry-delay 2 -o "$TARBALL" "$DOWNLOAD_URL"; then
+            echo "ERROR: failed to download nvidia_gpu_exporter"
+            rm -f "$TARBALL"
+            exit 1
         fi
     fi
+    if ! verify_tarball "$TARBALL"; then
+        echo "ERROR: sha256 mismatch on downloaded tarball"
+        echo "Expected: $EXPORTER_SHA256"
+        sha256sum "$TARBALL" || true
+        rm -f "$TARBALL"
+        exit 1
+    fi
+    echo "Download verified (sha256 ok)"
+fi
+
+# Drop cached tarballs from older releases to keep the flash drive tidy.
+find "$CACHE_DIR" -maxdepth 1 -name 'nvidia_gpu_exporter_*_linux_x86_64.tar.gz' \
+    ! -name "$(basename "$TARBALL")" -delete
+
+rm -rf "$TEMP_DIR"
+mkdir -p "$TEMP_DIR"
+tar -xzf "$TARBALL" -C "$TEMP_DIR"
+
+# The tarball ships the binary as nvidia_gpu_exporter (underscore); it is
+# installed hyphenated. Process matching must always use the full path.
+BINARY_FILE=$(find "$TEMP_DIR" -name nvidia_gpu_exporter -type f | head -1)
+if [ -z "$BINARY_FILE" ]; then
+    echo "ERROR: nvidia_gpu_exporter binary not found in tarball"
+    ls -la "$TEMP_DIR"
+    exit 1
+fi
+# Unlink first: overwriting a running binary in place fails with "text file busy".
+rm -f "$BINARY_PATH"
+install -m 0755 "$BINARY_FILE" "$BINARY_PATH"
+rm -rf "$TEMP_DIR"
+
+touch "$LOG_FILE"
+chmod 644 "$LOG_FILE"
+echo "Installed $BINARY_PATH (v${EXPORTER_VERSION})"
+
+if ! command -v nvidia-smi >/dev/null 2>&1; then
+    echo "WARNING: nvidia-smi not found. Install the Nvidia Driver plugin or the exporter will have no GPU data."
+fi
+]]>
+</INLINE>
+</FILE>
+
+<!-- 3. Control script: start/stop/restart/status, reads the flash config. -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh" Mode="0755">
+<INLINE>
+<![CDATA[#!/bin/bash
+# Control script for the NVIDIA GPU Exporter service. Called by the settings
+# page buttons, usable manually, and symlinked to
+# /usr/local/etc/rc.d/rc.nvidia-gpu-exporter. The no-argument (boot) path
+# honors the AUTOSTART setting; an explicit "start" always starts.
+
+BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
+CFG_FILE="/boot/config/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.cfg"
+LOG_FILE="/var/log/nvidia-gpu-exporter.log"
+
+LISTEN_PORT="9835"
+AUTOSTART="true"
+LOG_LEVEL="info"
+NVIDIA_SMI_CMD="nvidia-smi"
+QUERY_FIELDS="AUTO"
+TELEMETRY_PATH="/metrics"
+# shellcheck source=/dev/null
+[ -f "$CFG_FILE" ] && . "$CFG_FILE"
+
+running_pids() { pgrep -f "$BINARY_PATH" 2>/dev/null; }
+
+build_args() {
+    ARGS=(
+        "--web.listen-address=:${LISTEN_PORT}"
+        "--web.telemetry-path=${TELEMETRY_PATH}"
+        "--nvidia-smi-command=${NVIDIA_SMI_CMD}"
+        "--log.level=${LOG_LEVEL}"
+    )
+    # AUTO is the exporter's own default; only pass an explicit field list.
+    if [ -n "$QUERY_FIELDS" ] && [ "$QUERY_FIELDS" != "AUTO" ]; then
+        ARGS+=("--query-field-names=${QUERY_FIELDS}")
+    fi
+}
+
+start_service() {
+    if [ ! -x "$BINARY_PATH" ]; then
+        echo "ERROR: $BINARY_PATH not found; reinstall the plugin"
+        return 1
+    fi
+    PIDS=$(running_pids)
+    if [ -n "$PIDS" ]; then
+        echo "NVIDIA GPU Exporter already running (PID ${PIDS//$'\n'/ })"
+        return 0
+    fi
+    build_args
+    echo "$(date): starting nvidia-gpu-exporter on port ${LISTEN_PORT}" >> "$LOG_FILE"
+    nohup "$BINARY_PATH" "${ARGS[@]}" >> "$LOG_FILE" 2>&1 &
+    sleep 2
+    PIDS=$(running_pids)
+    if [ -n "$PIDS" ]; then
+        echo "NVIDIA GPU Exporter started (PID ${PIDS//$'\n'/ }, port ${LISTEN_PORT})"
+    else
+        echo "ERROR: NVIDIA GPU Exporter failed to start; last log lines:"
+        tail -5 "$LOG_FILE" 2>/dev/null
+        return 1
+    fi
+}
+
+stop_service() {
+    if [ -z "$(running_pids)" ]; then
+        echo "NVIDIA GPU Exporter is not running"
+        return 0
+    fi
+    echo "Stopping NVIDIA GPU Exporter..."
+    pkill -TERM -f "$BINARY_PATH" 2>/dev/null
+    for _ in $(seq 1 30); do
+        [ -z "$(running_pids)" ] && break
+        sleep 0.1
+    done
+    pkill -KILL -f "$BINARY_PATH" 2>/dev/null
+    if [ -z "$(running_pids)" ]; then
+        echo "$(date): stopped nvidia-gpu-exporter" >> "$LOG_FILE"
+        echo "NVIDIA GPU Exporter stopped"
+    else
+        echo "ERROR: failed to stop NVIDIA GPU Exporter"
+        return 1
+    fi
+}
+
+status_service() {
+    PIDS=$(running_pids)
+    if [ -n "$PIDS" ]; then
+        echo "NVIDIA GPU Exporter is running (PID ${PIDS//$'\n'/ })"
+        if ss -tln 2>/dev/null | grep -q ":${LISTEN_PORT} " || netstat -tln 2>/dev/null | grep -q ":${LISTEN_PORT} "; then
+            echo "Listening on port ${LISTEN_PORT} (metrics at ${TELEMETRY_PATH})"
+        else
+            echo "WARNING: port ${LISTEN_PORT} is not listening"
+        fi
+        return 0
+    fi
+    echo "NVIDIA GPU Exporter is not running"
     return 1
 }
 
-# Check if service is already running with proper verification
-RUNNING_PID=""
-DETECTED_PIDS=$(pgrep -x "nvidia-gpu-exporter" 2>/dev/null)
-for pid in $DETECTED_PIDS; do
-    if verify_pid "$pid"; then
-        RUNNING_PID="$pid"
-        break
-    fi
-done
-
-if [ -n "$RUNNING_PID" ]; then
-    echo "NVIDIA GPU Exporter is already running"
-    echo "Running with PID: $RUNNING_PID"
-else
-    echo "Starting nvidia-gpu-exporter service..."
-    echo "Command: $BINARY_PATH"
-    echo "Log file: $LOG_FILE"
-    
-    # Clean up any phantom processes first
-    pkill -f "/usr/local/bin/nvidia-gpu-exporter" 2>/dev/null || true
-    sleep 1
-    
-    # Start with explicit background execution
-    "$BINARY_PATH" > "$LOG_FILE" 2>&1 &
-    STARTUP_PID=$!
-    echo "Started with PID: $STARTUP_PID"
-    
-    # Wait and verify startup
-    sleep 5
-    
-    # Verify the startup PID is still valid and is our process
-    if verify_pid "$STARTUP_PID"; then
-        echo "NVIDIA GPU Exporter started successfully with PID: $STARTUP_PID"
-        echo "Service is running on port 9835"
-        echo "Logs are available at: $LOG_FILE"
-        
-        # Verify it's actually responding
-        sleep 2
-        if netstat -tuln 2>/dev/null | grep -q ":9835 " || ss -tuln 2>/dev/null | grep -q ":9835 "; then
-            echo "Service is listening on port 9835"
-        else
-            echo "WARNING: Service started but port 9835 may not be listening yet"
-        fi
-    else
-        echo "ERROR: Failed to start nvidia-gpu-exporter service"
-        echo "Startup PID was: $STARTUP_PID"
-        echo "Current processes:"
-        ps aux | grep nvidia-gpu-exporter | grep -v grep || echo "No nvidia-gpu-exporter processes found"
-        echo "Process verification failed - checking for actual running processes:"
-        
-        # Double-check with alternative method
-        FOUND_PID=""
-        ALL_PIDS=$(pgrep -x "nvidia-gpu-exporter" 2>/dev/null)
-        for pid in $ALL_PIDS; do
-            if verify_pid "$pid"; then
-                FOUND_PID="$pid"
-                echo "Found valid process with PID: $pid"
-                break
-            fi
-        done
-        
-        if [ -z "$FOUND_PID" ]; then
-            echo "Log file content:"
-            if [ -f "$LOG_FILE" ]; then
-                tail -20 "$LOG_FILE"
-            else
-                echo "Log file not created"
-            fi
-            exit 1
-        else
-            echo "Service actually started with PID: $FOUND_PID"
-        fi
-    fi
-fi
-]]>
-</INLINE>
-</FILE>
-
-<!-- Auto-start script for boot -->
-<FILE Name="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh" Mode="0755">
-<INLINE>
-<![CDATA[
-#!/bin/bash
-# Auto-start script for NVIDIA GPU Exporter
-
-BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
-LOG_FILE="/var/log/nvidia-gpu-exporter.log"
-
-# Function to start the service
-start_service() {
-    if [ -f "$BINARY_PATH" ]; then
-        # Check if already running (check both process names - binary uses underscore)
-        if ! pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
-            echo "$(date): Starting NVIDIA GPU Exporter..." >> "$LOG_FILE"
-            nohup "$BINARY_PATH" >> "$LOG_FILE" 2>&1 &
-            sleep 3
-            if pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
-                PID=$(pgrep -f "$BINARY_PATH")
-                echo "$(date): NVIDIA GPU Exporter started with PID: $PID" >> "$LOG_FILE"
-                echo "NVIDIA GPU Exporter started with PID: $PID"
-            else
-                echo "$(date): ERROR: Failed to start NVIDIA GPU Exporter" >> "$LOG_FILE"
-                echo "ERROR: Failed to start NVIDIA GPU Exporter"
-                return 1
-            fi
-        else
-            PID=$(pgrep -f "$BINARY_PATH")
-            echo "$(date): NVIDIA GPU Exporter already running with PID: $PID" >> "$LOG_FILE"
-            echo "NVIDIA GPU Exporter already running with PID: $PID"
-        fi
-    else
-        echo "$(date): ERROR: NVIDIA GPU Exporter binary not found at $BINARY_PATH" >> "$LOG_FILE"
-        echo "ERROR: NVIDIA GPU Exporter binary not found at $BINARY_PATH"
-        return 1
-    fi
-}
-
-# Function to stop the service
-stop_service() {
-    if pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
-        echo "$(date): Stopping NVIDIA GPU Exporter..." >> "$LOG_FILE"
-        echo "Stopping NVIDIA GPU Exporter..."
-        
-        # Get all PIDs
-        PIDS=$(pgrep -f "$BINARY_PATH")
-        echo "Found PIDs: $PIDS"
-        
-        # Kill all processes
-        for PID in $PIDS; do
-            echo "Killing PID: $PID"
-            kill "$PID" 2>/dev/null
-        done
-        
-        sleep 3
-        
-        # Check if any are still running
-        if pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
-            echo "$(date): Force killing remaining NVIDIA GPU Exporter processes..." >> "$LOG_FILE"
-            echo "Force killing remaining processes..."
-            pkill -9 -f "$BINARY_PATH"
-            sleep 2
-        fi
-        
-        # Final check
-        if ! pgrep -f "$BINARY_PATH" > /dev/null 2>&1; then
-            echo "$(date): NVIDIA GPU Exporter stopped successfully" >> "$LOG_FILE"
-            echo "NVIDIA GPU Exporter stopped successfully"
-        else
-            echo "$(date): ERROR: Failed to stop NVIDIA GPU Exporter" >> "$LOG_FILE"
-            echo "ERROR: Failed to stop NVIDIA GPU Exporter"
-            return 1
-        fi
-    else
-        echo "$(date): NVIDIA GPU Exporter is not running" >> "$LOG_FILE"
-        echo "NVIDIA GPU Exporter is not running"
-    fi
-}
-
-# Function to check service status
-status_service() {
-    PIDS=$(pgrep -f "$BINARY_PATH" 2>/dev/null)
-    if [ -n "$PIDS" ]; then
-        echo "NVIDIA GPU Exporter is running with PID(s): $PIDS"
-        echo "Service is available on port 9835"
-        
-        # Check if port is actually listening
-        if command -v netstat >/dev/null 2>&1; then
-            if netstat -tuln 2>/dev/null | grep -q ":9835 "; then
-                echo "Port 9835 is listening"
-            else
-                echo "WARNING: Port 9835 is not listening"
-            fi
-        elif command -v ss >/dev/null 2>&1; then
-            if ss -tuln 2>/dev/null | grep -q ":9835 "; then
-                echo "Port 9835 is listening"
-            else
-                echo "WARNING: Port 9835 is not listening"
-            fi
-        fi
-        return 0
-    else
-        echo "NVIDIA GPU Exporter is not running"
-        return 1
-    fi
-}
-
-# Handle command line arguments
 case "$1" in
     start)
         start_service
@@ -365,111 +272,382 @@ case "$1" in
         ;;
     restart)
         stop_service
-        sleep 2
+        sleep 1
         start_service
+        ;;
+    # "apply" backs the settings page Apply button: pick up the new config, but
+    # do not start a service the user has deliberately left stopped.
+    apply)
+        if [ -n "$(running_pids)" ] || [ "$AUTOSTART" = "true" ]; then
+            stop_service
+            sleep 1
+            start_service
+        else
+            echo "Settings saved; service is stopped and auto-start is disabled"
+        fi
         ;;
     status)
         status_service
         ;;
     *)
-        # Default action is to start (for auto-start on boot)
-        start_service
+        if [ "$AUTOSTART" = "true" ]; then
+            start_service
+        else
+            echo "Auto-start disabled in $CFG_FILE"
+        fi
         ;;
 esac
 ]]>
 </INLINE>
+<MD5>3b2f37752c8555dac565ce6010b6b482</MD5>
 </FILE>
 
-<!-- Create the auto-start symlink -->
+<!-- 4. Settings page (Settings -> User Utilities -> NVIDIA GPU Exporter). -->
+<FILE Name="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.page" Mode="0644">
+<INLINE>
+<![CDATA[Menu="Utilities"
+Type="xmenu"
+Title="NVIDIA GPU Exporter"
+Icon="nvidia_exporter.png"
+---
+<?PHP
+/* Copyright 2026, mac-lucky. Licensed MIT. */
+$plugin   = "nvidia-gpu-exporter";
+$cfg_path = "/boot/config/plugins/{$plugin}/{$plugin}.cfg";
+$cfg      = file_exists($cfg_path) ? @parse_ini_file($cfg_path) : [];
+
+function nv_val($cfg, $key, $default = '') {
+    return htmlspecialchars($cfg[$key] ?? $default, ENT_QUOTES);
+}
+function nv_yesno($cfg, $key, $default) {
+    $v = ($cfg[$key] ?? $default) !== 'false';
+    $t = $v ? ' selected' : '';
+    $f = $v ? '' : ' selected';
+    return "<option value='true'$t>Enabled</option><option value='false'$f>Disabled</option>";
+}
+function nv_select($cfg, $key, $default, $options) {
+    $cur = $cfg[$key] ?? $default;
+    $out = '';
+    foreach ($options as $o) {
+        $sel = $o === $cur ? ' selected' : '';
+        $e = htmlspecialchars($o, ENT_QUOTES);
+        $out .= "<option value='$e'$sel>$e</option>";
+    }
+    return $out;
+}
+
+$binary = "/usr/local/bin/nvidia-gpu-exporter";
+$rc     = "/usr/local/emhttp/plugins/{$plugin}/{$plugin}.sh";
+$port   = (int) ($cfg['LISTEN_PORT'] ?? 9835);
+$mpath  = $cfg['TELEMETRY_PATH'] ?? '/metrics';
+
+// Service state. The [r] bracket keeps pgrep from matching this exec's own
+// sh -c wrapper, whose argv contains the pattern.
+@exec('pgrep -f "/usr/local/bin/nvidia-gpu-exporte[r]" 2>/dev/null', $pids);
+$running = !empty($pids);
+
+// Port probe with a short timeout so the page never hangs.
+$listening = false;
+if ($running) {
+    $s = @fsockopen('127.0.0.1', $port, $errno, $errstr, 2);
+    if ($s) { $listening = true; fclose($s); }
+}
+
+// Installed exporter version, e.g. "nvidia_gpu_exporter, version 1.10.0 (...)".
+$version = '';
+if (is_executable($binary)) {
+    @exec(escapeshellarg($binary) . ' --version 2>&1', $vout);
+    foreach ((array) $vout as $line) {
+        if (preg_match('/version\s+([0-9][0-9.]*)/', $line, $m)) { $version = $m[1]; break; }
+    }
+}
+
+// nvidia-smi presence: honor a configured absolute path, else a PATH lookup.
+$smi_bin = strtok((string) ($cfg['NVIDIA_SMI_CMD'] ?? 'nvidia-smi'), ' ');
+if ($smi_bin !== false && $smi_bin !== '' && $smi_bin[0] === '/') {
+    $smi_ok = is_executable($smi_bin);
+} else {
+    @exec('command -v ' . escapeshellarg((string) $smi_bin) . ' 2>/dev/null', $w);
+    $smi_ok = !empty($w);
+}
+
+$logTail = '';
+if (is_file('/var/log/nvidia-gpu-exporter.log')) {
+    $logTail = htmlspecialchars(implode('', array_slice((array) @file('/var/log/nvidia-gpu-exporter.log'), -12)), ENT_QUOTES);
+}
+
+$host = preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? '');
+$metricsUrl = 'http://' . $host . ':' . $port . $mpath;
+
+// Status chips. Values are stored raw and htmlspecialchars'd at the echo site.
+$chips = [];
+$chips[] = ['label' => 'Service', 'state' => $running ? 'ok' : 'warn',
+    'value' => $running ? 'Running' : 'Stopped'];
+if ($listening) {
+    $chips[] = ['label' => "Port $port", 'state' => 'ok', 'value' => 'Listening'];
+} else {
+    $chips[] = ['label' => "Port $port", 'state' => $running ? 'bad' : 'warn',
+        'value' => 'Not listening', 'sub' => $running ? 'check the log below' : 'service is stopped'];
+}
+if ($version) {
+    $chips[] = ['label' => 'Exporter', 'state' => 'ok', 'value' => "v$version"];
+} elseif (is_executable($binary)) {
+    $chips[] = ['label' => 'Exporter', 'state' => 'warn', 'value' => 'Installed'];
+} else {
+    $chips[] = ['label' => 'Exporter', 'state' => 'bad', 'value' => 'Not installed', 'sub' => 'reinstall the plugin'];
+}
+$chips[] = ['label' => 'NVIDIA driver', 'state' => $smi_ok ? 'ok' : 'warn',
+    'value' => $smi_ok ? 'nvidia-smi found' : 'nvidia-smi missing',
+    'sub' => $smi_ok ? '' : 'install the Nvidia Driver plugin'];
+
+function nv_chip_icon($cls) {
+    static $icons = [
+        'ok'   => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+        'bad'  => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>',
+        'warn' => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12" y2="16.5"/></svg>',
+    ];
+    return $icons[$cls] ?? $icons['warn'];
+}
+?>
+
+<style>
+.nv-wrap {
+  --nv-green:#5b9b5b; --nv-orange:#b5651d; --nv-red:#c0392b;
+  --nv-accent:#76b900; --nv-accent-bg:rgba(118,185,0,.12);
+  max-width: 880px;
+}
+.nv-hero { display:flex; align-items:center; gap:10px; padding:4px 0 12px; margin-bottom:14px; border-bottom:1px solid var(--border-color,rgba(128,128,128,.3)); }
+.nv-hero img { height:30px; width:30px; border-radius:7px; display:block; }
+.nv-hero .nv-brand { font-weight:700; font-size:1.15em; letter-spacing:.2px; }
+.nv-hero .nv-tag { opacity:.55; font-size:.85em; }
+.nv-hero .nv-link { margin-left:auto; font-size:.85em; opacity:.8; text-decoration:none; white-space:nowrap; }
+.nv-hero .nv-link:hover { opacity:1; text-decoration:underline; }
+
+.nv-statusgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin:2px 0 4px; }
+.nv-chip { display:flex; align-items:flex-start; gap:9px; padding:10px 12px; border:1px solid var(--border-color,rgba(128,128,128,.35)); border-left:3px solid var(--nv-green); border-radius:9px; background:rgba(128,128,128,.06); }
+.nv-chip-ok   { border-left-color:var(--nv-green); }
+.nv-chip-warn { border-left-color:var(--nv-orange); }
+.nv-chip-bad  { border-left-color:var(--nv-red); }
+.nv-chip-ic { flex:0 0 auto; margin-top:1px; }
+.nv-chip-ic svg { width:17px; height:17px; display:block; }
+.nv-chip-ok  .nv-chip-ic { color:var(--nv-green); }
+.nv-chip-warn .nv-chip-ic { color:var(--nv-orange); }
+.nv-chip-bad .nv-chip-ic { color:var(--nv-red); }
+.nv-chip-tx { display:flex; flex-direction:column; min-width:0; line-height:1.35; }
+.nv-chip-label { font-size:.7em; text-transform:uppercase; letter-spacing:.4px; opacity:.55; }
+.nv-chip-val { font-weight:600; }
+.nv-chip-sub { font-size:.78em; opacity:.6; margin-top:1px; }
+
+.nv-callout { display:flex; gap:10px; padding:11px 14px; border:1px solid var(--border-color,rgba(128,128,128,.3)); border-left:4px solid var(--nv-accent); border-radius:9px; background:var(--nv-accent-bg); margin:16px 0; font-size:.92em; }
+.nv-callout svg { flex:0 0 auto; width:18px; height:18px; color:var(--nv-accent); margin-top:2px; }
+.nv-callout p { margin:0; }
+
+.nv-logwrap { margin:16px 0; }
+.nv-logwrap h4 { margin:0 0 6px; font-size:.78em; opacity:.6; font-weight:600; text-transform:uppercase; letter-spacing:.4px; }
+.nv-log { font-family:var(--font-mono,monospace); font-size:.8em; line-height:1.5; white-space:pre-wrap; word-break:break-word; background:rgba(128,128,128,.10); border:1px solid var(--border-color,rgba(128,128,128,.25)); padding:9px 11px; border-radius:7px; max-height:180px; overflow:auto; }
+</style>
+
+<div class="nv-wrap">
+<div class="nv-hero">
+  <img src="/plugins/nvidia-gpu-exporter/nvidia_exporter.png" alt="NVIDIA GPU Exporter">
+  <span class="nv-brand">NVIDIA GPU Exporter</span><span class="nv-tag">Settings</span>
+  <a class="nv-link" href="https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin" target="_blank" rel="noopener noreferrer">GitHub &rarr;</a>
+</div>
+<div class="nv-statusgrid">
+<?PHP foreach ($chips as $ch): ?>
+  <div class="nv-chip nv-chip-<?= $ch['state'] ?>">
+    <span class="nv-chip-ic"><?= nv_chip_icon($ch['state']) ?></span>
+    <span class="nv-chip-tx">
+      <span class="nv-chip-label"><?= htmlspecialchars($ch['label'], ENT_QUOTES) ?></span>
+      <span class="nv-chip-val"><?= htmlspecialchars($ch['value'], ENT_QUOTES) ?></span>
+      <?PHP if (!empty($ch['sub'])): ?><span class="nv-chip-sub"><?= htmlspecialchars($ch['sub'], ENT_QUOTES) ?></span><?PHP endif; ?>
+    </span>
+  </div>
+<?PHP endforeach; ?>
+</div>
+</div>
+
+<form markdown="1" name="nvidia_gpu_exporter_settings" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="<?= $cfg_path ?>">
+<input type="hidden" name="#command" value="<?= $rc ?>">
+<input type="hidden" name="#arg[1]" value="apply">
+
+Listen port:
+: <input type="number" name="LISTEN_PORT" min="1" max="65535" value="<?= nv_val($cfg,'LISTEN_PORT','9835') ?>">
+
+> TCP port the exporter listens on. The default 9835 is the conventional
+> nvidia_gpu_exporter port.
+
+Auto-start on boot:
+: <select name="AUTOSTART"><?= nv_yesno($cfg,'AUTOSTART','true') ?></select>
+
+Log level:
+: <select name="LOG_LEVEL"><?= nv_select($cfg,'LOG_LEVEL','info',['debug','info','warn','error']) ?></select>
+
+nvidia-smi command:
+: <input type="text" name="NVIDIA_SMI_CMD" maxlength="200" value="<?= nv_val($cfg,'NVIDIA_SMI_CMD','nvidia-smi') ?>">
+
+> Command or absolute path the exporter runs to query the GPU. Leave as
+> nvidia-smi unless the driver installs it somewhere unusual.
+
+Query fields:
+: <input type="text" name="QUERY_FIELDS" maxlength="500" value="<?= nv_val($cfg,'QUERY_FIELDS','AUTO') ?>">
+
+> Comma-separated nvidia-smi query fields to export. AUTO lets the exporter
+> discover all fields supported by the driver.
+
+Telemetry path:
+: <input type="text" name="TELEMETRY_PATH" maxlength="100" value="<?= nv_val($cfg,'TELEMETRY_PATH','/metrics') ?>">
+
+&nbsp;
+: <input type="submit" name="apply" value="Apply"> <input type="button" value="Done" onclick="done()">
+
+</form>
+
+<form markdown="1" name="nvidia_gpu_exporter_ctl" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#command" value="<?= $rc ?>">
+<input type="hidden" id="nv_ctl_arg" name="#arg[1]" value="status">
+
+Service control:
+: <input type="submit" value="Start" onclick="document.getElementById('nv_ctl_arg').value='start'">
+  <input type="submit" value="Stop" onclick="document.getElementById('nv_ctl_arg').value='stop'">
+  <input type="submit" value="Restart" onclick="document.getElementById('nv_ctl_arg').value='restart'">
+
+</form>
+
+<div class="nv-wrap">
+<div class="nv-callout">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8.5"/></svg>
+  <p><strong>Prometheus:</strong> scrape
+  <?PHP if ($listening): ?><a href="<?= htmlspecialchars($metricsUrl, ENT_QUOTES) ?>" target="_blank" rel="noopener noreferrer"><?= htmlspecialchars($metricsUrl, ENT_QUOTES) ?></a><?PHP else: ?><?= htmlspecialchars($metricsUrl, ENT_QUOTES) ?><?PHP endif; ?>.
+  GPU metrics come from nvidia-smi, so the
+  <a href="/Apps" target="_blank" rel="noopener noreferrer">Nvidia Driver plugin</a> must be installed.
+  Changing settings and pressing Apply restarts the service with the new flags.</p>
+</div>
+<?PHP if ($logTail): ?>
+<div class="nv-logwrap">
+  <h4>Service log</h4>
+  <div class="nv-log"><?= $logTail ?></div>
+</div>
+<?PHP endif; ?>
+</div>
+
+<script>
+// Unraid renders the settings form as a centered field column with a wide empty
+// left margin. Snap the hero/status/callout/log bands to that same column (left
+// edge and width) at runtime so the page reads as one stack. Measured from the
+// form's own <dl> (or its fields) so it tracks the active theme and viewport
+// instead of a hard-coded guess; falls back to the CSS max-width if JS is off.
+(function () {
+  var wraps = document.querySelectorAll('.nv-wrap');
+  if (!wraps.length) return;
+  function fieldBox() {
+    var form = document.querySelector('form[name="nvidia_gpu_exporter_settings"]');
+    if (!form) return null;
+    var dl = form.querySelector('dl');
+    if (dl) { var r = dl.getBoundingClientRect(); if (r.width > 1) return r; }
+    var lo = Infinity, hi = -Infinity;
+    form.querySelectorAll('input,select,dt,dd,button').forEach(function (e) {
+      var b = e.getBoundingClientRect();
+      if (b.width > 0) { lo = Math.min(lo, b.left); hi = Math.max(hi, b.right); }
+    });
+    return isFinite(lo) ? { left: lo, width: hi - lo } : null;
+  }
+  function align() {
+    var box = fieldBox();
+    if (!box) return;
+    // Reset to baseline width, then read every band's left, then write every
+    // margin: batching reads before writes avoids a reflow per band.
+    wraps.forEach(function (w) { w.style.marginLeft = '0'; w.style.marginRight = '0'; w.style.maxWidth = Math.round(box.width) + 'px'; });
+    var shifts = [];
+    wraps.forEach(function (w) { shifts.push(Math.round(box.left - w.getBoundingClientRect().left)); });
+    wraps.forEach(function (w, i) { w.style.marginLeft = shifts[i] + 'px'; });
+  }
+  var pending = 0;
+  function schedule() { if (!pending) pending = requestAnimationFrame(function () { pending = 0; align(); }); }
+  align();
+  setTimeout(align, 300); // re-run after late theme/font layout settles
+  window.addEventListener('resize', schedule);
+})();
+</script>
+]]>
+</INLINE>
+<MD5>c0f17d3e9f290b00e9aafe61c36f1e38</MD5>
+</FILE>
+
+<!-- 5. Plugin icon, base64-decoded on install. -->
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-# Create auto-start functionality
-echo "Setting up auto-start for NVIDIA GPU Exporter..."
-
-SCRIPT_PATH="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh"
-AUTOSTART_DIR="/usr/local/etc/rc.d"
-
-# Create the autostart directory if it doesn't exist
-mkdir -p "$AUTOSTART_DIR"
-
-# Create symlink for auto-start
-if [ -f "$SCRIPT_PATH" ]; then
-    ln -sf "$SCRIPT_PATH" "$AUTOSTART_DIR/rc.nvidia-gpu-exporter"
-    echo "Auto-start configured successfully"
-    echo "The service will automatically start on boot"
-else
-    echo "ERROR: Auto-start script not found at $SCRIPT_PATH"
-fi
-
-# Verify installation
-echo ""
-echo "=== Installation Summary ==="
-echo "Binary location: /usr/local/bin/nvidia-gpu-exporter"
-echo "Log file: /var/log/nvidia-gpu-exporter.log"
-echo "Control script: $SCRIPT_PATH"
-echo "Service port: 9835"
-echo ""
-echo "Manual control commands:"
-echo "  Start:   $SCRIPT_PATH start"
-echo "  Stop:    $SCRIPT_PATH stop"
-echo "  Status:  $SCRIPT_PATH status"
-echo "  Restart: $SCRIPT_PATH restart"
-echo ""
-echo "Process management:"
-echo "  Check if running: pgrep -f nvidia-gpu-exporter"
-echo "  Kill process:     pkill -f nvidia-gpu-exporter"
-echo ""
-echo "NVIDIA GPU Exporter plugin installation completed!"
+mkdir -p "/usr/local/emhttp/plugins/nvidia-gpu-exporter"
+base64 -d > "/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia_exporter.png" <<'NVICONB64'
+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
+NVICONB64
+chmod 0644 "/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia_exporter.png"
 ]]>
 </INLINE>
 </FILE>
 
-<!-- Plugin removal script -->
+<!-- 6. Post-install: rc.d symlink, start the service, print summary. -->
+<FILE Run="/bin/bash">
+<INLINE>
+<![CDATA[
+CFG_FILE="/boot/config/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.cfg"
+RC_SCRIPT="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh"
+
+mkdir -p /usr/local/etc/rc.d
+ln -sf "$RC_SCRIPT" /usr/local/etc/rc.d/rc.nvidia-gpu-exporter
+
+LISTEN_PORT="9835"
+AUTOSTART="true"
+TELEMETRY_PATH="/metrics"
+# shellcheck source=/dev/null
+[ -f "$CFG_FILE" ] && . "$CFG_FILE"
+
+# Restart when auto-start is on or the service is already up, so an upgrade
+# swaps in the new binary; otherwise leave it stopped.
+if [ "$AUTOSTART" = "true" ] || pgrep -f /usr/local/bin/nvidia-gpu-exporter >/dev/null 2>&1; then
+    "$RC_SCRIPT" restart || echo "WARNING: service failed to start; check /var/log/nvidia-gpu-exporter.log"
+fi
+
+cat <<EOF
+
+================================================================
+  NVIDIA GPU Exporter plugin installed.
+
+  Find it under:  Settings -> User Utilities -> NVIDIA GPU Exporter
+  Metrics:        http://<server>:${LISTEN_PORT}${TELEMETRY_PATH}
+
+  GPU data requires nvidia-smi from the Nvidia Driver plugin.
+================================================================
+
+EOF
+]]>
+</INLINE>
+</FILE>
+
+<!-- 7. Removal: stop the service, drop binary/pages/log/cached tarballs; keep config. -->
 <FILE Run="/bin/bash" Method="remove">
 <INLINE>
 <![CDATA[
 echo "Uninstalling NVIDIA GPU Exporter plugin..."
 
-# Stop the service if running
-if pgrep -f nvidia-gpu-exporter > /dev/null; then
-    echo "Stopping NVIDIA GPU Exporter service..."
-    pkill -f nvidia-gpu-exporter
-    sleep 2
-    
-    # Force kill if still running
-    if pgrep -f nvidia-gpu-exporter > /dev/null; then
-        echo "Force stopping service..."
-        pkill -9 -f nvidia-gpu-exporter
-    fi
-    echo "Service stopped"
-fi
+# Stop the service: TERM with a grace period, then KILL.
+pkill -TERM -f /usr/local/bin/nvidia-gpu-exporter 2>/dev/null || true
+for _ in $(seq 1 30); do
+    pgrep -f /usr/local/bin/nvidia-gpu-exporter >/dev/null 2>&1 || break
+    sleep 0.1
+done
+pkill -KILL -f /usr/local/bin/nvidia-gpu-exporter 2>/dev/null || true
 
-# Remove binary
-if [ -f "/usr/local/bin/nvidia-gpu-exporter" ]; then
-    rm -f "/usr/local/bin/nvidia-gpu-exporter"
-    echo "Removed binary: /usr/local/bin/nvidia-gpu-exporter"
-fi
+rm -f /usr/local/bin/nvidia-gpu-exporter
+rm -f /usr/local/etc/rc.d/rc.nvidia-gpu-exporter
+rm -rf /usr/local/emhttp/plugins/nvidia-gpu-exporter
+rm -f /var/log/nvidia-gpu-exporter.log
+rm -f /boot/config/plugins/nvidia-gpu-exporter/nvidia_gpu_exporter_*_linux_x86_64.tar.gz
 
-# Remove auto-start symlink
-if [ -L "/usr/local/etc/rc.d/rc.nvidia-gpu-exporter" ]; then
-    rm -f "/usr/local/etc/rc.d/rc.nvidia-gpu-exporter"
-    echo "Removed auto-start symlink"
-fi
-
-# Remove plugin directory
-if [ -d "/usr/local/emhttp/plugins/nvidia-gpu-exporter" ]; then
-    rm -rf "/usr/local/emhttp/plugins/nvidia-gpu-exporter"
-    echo "Removed plugin directory"
-fi
-
-# Remove log file
-if [ -f "/var/log/nvidia-gpu-exporter.log" ]; then
-    rm -f "/var/log/nvidia-gpu-exporter.log"
-    echo "Removed log file: /var/log/nvidia-gpu-exporter.log"
-fi
-
-echo "NVIDIA GPU Exporter plugin uninstalled successfully"
+echo "Removed the service, control script, settings page and cached tarballs."
+echo "Config at /boot/config/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.cfg left intact."
 ]]>
 </INLINE>
 </FILE>

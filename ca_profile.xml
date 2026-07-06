@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CommunityApplications>
+  <Profile>
+    Installs and supervises nvidia_gpu_exporter, which exposes NVIDIA GPU
+    metrics (utilization, temperature, power, clocks, memory) in Prometheus
+    format on port 9835. Includes a settings page under Settings for port,
+    auto-start, log level and nvidia-smi options, with service controls and
+    live status. Requires the Nvidia Driver plugin for GPU data. The bundled
+    exporter version is updated automatically from upstream releases. Report
+    issues on GitHub at the link below.
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin/main/src/nvidia_exporter.png</Icon>
+  <WebPage>https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin</WebPage>
+  <Forum>https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin/issues</Forum>
+</CommunityApplications>

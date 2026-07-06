@@ -47,3 +47,8 @@ temp/
 
 # OS generated files
 Icon?
+
+# AI tooling artifacts
+CLAUDE.md
+AGENTS.md
+.claude/

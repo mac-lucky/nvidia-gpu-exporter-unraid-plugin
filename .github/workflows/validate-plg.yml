@@ -1,0 +1,57 @@
+name: Validate plugin
+
+on:
+  push:
+    branches: [main]
+    paths: ['nvidia_gpu_exporter.plg', 'src/**', 'build-plg.sh', '.github/workflows/validate-plg.yml']
+  pull_request:
+    paths: ['nvidia_gpu_exporter.plg', 'src/**', 'build-plg.sh', '.github/workflows/validate-plg.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check nvidia_gpu_exporter.plg is in sync with src/
+        run: |
+          bash build-plg.sh /tmp/rebuilt.plg >/dev/null
+          if ! diff -u nvidia_gpu_exporter.plg /tmp/rebuilt.plg; then
+            echo "::error::nvidia_gpu_exporter.plg is stale. Run ./build-plg.sh and commit the result."
+            exit 1
+          fi
+
+      - name: Install validators
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libxml2-utils shellcheck php-cli >/dev/null
+
+      - name: Validate XML
+        run: xmllint --noout nvidia_gpu_exporter.plg
+
+      - name: Syntax-check and shellcheck the shell scripts
+        run: |
+          set -euo pipefail
+          for f in src/*.sh build-plg.sh; do
+            echo "== $f =="
+            bash -n "$f"
+            shellcheck -s bash "$f"
+          done
+
+      - name: Lint the settings page (PHP body and embedded JS)
+        run: |
+          set -euo pipefail
+          # The .page file has a "header\n---\nbody" layout; strip the header so
+          # only the PHP/HTML body is linted.
+          awk 'f{print} /^---$/{f=1}' src/nvidia-gpu-exporter.page > /tmp/page.body.php
+          php -l /tmp/page.body.php
+          # php -l does not cover the embedded JS; syntax-check each <script>.
+          perl -0777 -ne 'print $1 while /<script[^>]*>(.*?)<\/script>/sg' src/nvidia-gpu-exporter.page > /tmp/page.js
+          node --check /tmp/page.js
