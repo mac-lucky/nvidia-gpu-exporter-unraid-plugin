@@ -17,6 +17,10 @@
 - Updated to nvidia-gpu-exporter v1.10.0
 - Auto-updated via GitHub Actions
 
+###2026.07.06
+- Updated to nvidia-gpu-exporter v1.10.0
+- Auto-updated via GitHub Actions
+
 ###2025.11.27
 - Fixed control script process detection (changed from pgrep -x to pgrep -f)
 - Service status now correctly detects running processes
