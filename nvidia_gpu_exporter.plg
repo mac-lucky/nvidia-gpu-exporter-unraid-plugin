@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2026.07.06b">
+<!ENTITY version   "2026.07.06c">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
 <!ENTITY supportURL "&gitURL;/issues">
@@ -20,6 +20,9 @@
         min="6.9">
 
 <CHANGES>
+###2026.07.06c
+- Updated to nvidia-gpu-exporter v1.10.0
+- Auto-updated via GitHub Actions
 ###2026.07.06b
 - Add a settings page under Settings -> User Utilities -> NVIDIA GPU Exporter
 - Settings persist on the flash drive: listen port, auto-start, log level, nvidia-smi command, query fields, telemetry path
