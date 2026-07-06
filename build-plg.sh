@@ -7,7 +7,7 @@ OUT="${1:-$(dirname "$0")/nvidia_gpu_exporter.plg}"
 
 # Single source of truth for versions. The auto-update workflow rewrites the
 # three lines below and re-runs this script; nothing under src/ carries a version.
-VERSION="2026.07.06b"
+VERSION="2026.07.06c"
 EXPORTER_VERSION="1.10.0"
 EXPORTER_SHA256="bb7c603d923beb57481652ac9848d1aa89da674b56ed99f99b6631418fbd9e56"
 DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${EXPORTER_VERSION}/nvidia_gpu_exporter_${EXPORTER_VERSION}_linux_x86_64.tar.gz"
@@ -86,6 +86,9 @@ cat <<XMLHEAD
         min="6.9">
 
 <CHANGES>
+###2026.07.06c
+- Updated to nvidia-gpu-exporter v1.10.0
+- Auto-updated via GitHub Actions
 ###2026.07.06b
 - Add a settings page under Settings -> User Utilities -> NVIDIA GPU Exporter
 - Settings persist on the flash drive: listen port, auto-start, log level, nvidia-smi command, query fields, telemetry path
