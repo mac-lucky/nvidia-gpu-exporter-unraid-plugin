@@ -173,7 +173,7 @@ jobs:
             --head "$BRANCH_NAME" \
             --base main
 
-      - name: Enable auto-merge and auto-delete branch
+      - name: Merge pull request and delete branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
@@ -181,13 +181,15 @@ jobs:
           # Get PR number
           BRANCH_NAME="update-nvidia-gpu-exporter-${LATEST_VERSION}"
           PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
-          
+
           if [ -n "$PR_NUMBER" ]; then
-            # Enable auto-merge with squash (this will auto-delete the branch)
-            gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
-            echo "Auto-merge enabled for PR #$PR_NUMBER with auto-delete branch"
+            # Squash-merge directly and delete the branch. The repo has auto-merge
+            # disabled and no required PR checks, so a direct merge is reliable.
+            gh pr merge "$PR_NUMBER" --squash --delete-branch
+            echo "Merged PR #$PR_NUMBER and deleted branch"
           else
-            echo "Could not find PR to enable auto-merge"
+            echo "ERROR: Could not find PR to merge"
+            exit 1
           fi
 
   notify:
