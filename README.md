@@ -1,3 +1,5 @@
+<img src="icon.svg" width="96" align="right" alt="">
+
 # NVIDIA GPU Exporter Plugin for Unraid
 
 ![Auto Update](https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin/workflows/Auto%20Update%20NVIDIA%20GPU%20Exporter%20Version/badge.svg)
