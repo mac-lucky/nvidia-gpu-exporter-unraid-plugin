@@ -51,7 +51,7 @@ jobs:
           echo "Latest version: $LATEST_VERSION"
           echo "latest-version=$LATEST_VERSION" >> $GITHUB_OUTPUT
 
-          DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | contains("linux_x86_64.tar.gz")) | .browser_download_url')
+          DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | test("^nvidia_gpu_exporter_[0-9][0-9.]*_linux_x86_64\\.tar\\.gz$")) | .browser_download_url')
           echo "Download URL: $DOWNLOAD_URL"
           echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
 
@@ -79,9 +79,9 @@ jobs:
           LATEST_NO_V="${LATEST_VERSION#v}"
           TODAY=$(date +%Y.%m.%d)
 
-          # Fetch the release checksum for the linux_x86_64 tarball
+          # Fetch the release checksum for the plain linux_x86_64 tarball
           SHA=$(curl -sL "https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/${LATEST_VERSION}/checksums.txt" \
-            | awk '/linux_x86_64\.tar\.gz/{print $1}')
+            | awk -v f="nvidia_gpu_exporter_${LATEST_NO_V}_linux_x86_64.tar.gz" '$2==f{print $1}')
           if ! echo "$SHA" | grep -qE '^[0-9a-f]{64}$'; then
             echo "ERROR: could not fetch a valid sha256 from checksums.txt (got: $SHA)"
             exit 1
