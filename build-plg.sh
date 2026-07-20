@@ -7,9 +7,9 @@ OUT="${1:-$(dirname "$0")/nvidia_gpu_exporter.plg}"
 
 # Single source of truth for versions. The auto-update workflow rewrites the
 # three lines below and re-runs this script; nothing under src/ carries a version.
-VERSION="2026.07.06c"
-EXPORTER_VERSION="1.10.0"
-EXPORTER_SHA256="bb7c603d923beb57481652ac9848d1aa89da674b56ed99f99b6631418fbd9e56"
+VERSION="2026.07.20"
+EXPORTER_VERSION="1.13.0"
+EXPORTER_SHA256="1366362d3b1f96ec8b6c04233fec8ec6c8c01c347e5fb15964276a10c73ca412"
 DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${EXPORTER_VERSION}/nvidia_gpu_exporter_${EXPORTER_VERSION}_linux_x86_64.tar.gz"
 
 # Guard: a literal ]]> in any embedded text file would break its CDATA section.
@@ -86,6 +86,9 @@ cat <<XMLHEAD
         min="6.9">
 
 <CHANGES>
+###2026.07.20
+- Updated to nvidia-gpu-exporter v1.13.0
+- Auto-updated via GitHub Actions
 ###2026.07.06c
 - Updated to nvidia-gpu-exporter v1.10.0
 - Auto-updated via GitHub Actions
