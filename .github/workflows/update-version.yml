@@ -14,6 +14,7 @@ on:
         type: boolean
   push:
     # Run when the workflow itself is modified
+    branches: [main]
     paths:
       - '.github/workflows/update-version.yml'
   pull_request:
@@ -40,14 +41,21 @@ jobs:
 
       - name: Check for new version
         id: version-check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # build-plg.sh is the single source of truth for the exporter version
           CURRENT_VERSION="v$(grep -oE '^EXPORTER_VERSION="[0-9.]+"' build-plg.sh | cut -d'"' -f2)"
           echo "Current version: $CURRENT_VERSION"
           echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest)
+          LATEST_RELEASE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest)
           LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
+          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" == "null" ]; then
+            echo "ERROR: could not determine latest version (tag_name was empty or null)"
+            echo "$LATEST_RELEASE"
+            exit 1
+          fi
           echo "Latest version: $LATEST_VERSION"
           echo "latest-version=$LATEST_VERSION" >> $GITHUB_OUTPUT
 
