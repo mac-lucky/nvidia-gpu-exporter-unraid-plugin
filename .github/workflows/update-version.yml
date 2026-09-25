@@ -22,13 +22,13 @@ on:
     paths:
       - '.github/workflows/update-version.yml'
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 
 jobs:
   check-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       update-needed: ${{ steps.version-check.outputs.update-needed }}
       current-version: ${{ steps.version-check.outputs.current-version }}
@@ -38,11 +38,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Check for new version
         id: version-check
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_UPDATE: ${{ github.event.inputs.force_update }}
         run: |
           # build-plg.sh is the single source of truth for the exporter version
           CURRENT_VERSION="v$(grep -oE '^EXPORTER_VERSION="[0-9.]+"' build-plg.sh | cut -d'"' -f2)"
@@ -63,7 +66,7 @@ jobs:
           echo "Download URL: $DOWNLOAD_URL"
           echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
 
-          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ] || [ "${{ github.event.inputs.force_update }}" == "true" ]; then
+          if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ] || [ "$FORCE_UPDATE" == "true" ]; then
             echo "Update needed: true"
             echo "update-needed=true" >> $GITHUB_OUTPUT
           else
@@ -71,19 +74,27 @@ jobs:
             echo "update-needed=false" >> $GITHUB_OUTPUT
           fi
 
+  # Never on a pull request: this job pushes a branch cut from the checked-out
+  # ref and merges it, which from a PR's merge commit would land the PR's own
+  # changes on main unreviewed. A PR run stops after check-version.
   update-plugin:
     needs: check-version
-    if: needs.check-version.outputs.update-needed == 'true'
+    if: needs.check-version.outputs.update-needed == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
+        # zizmor: ignore[artipacked] the Create Pull Request step pushes the update branch with this credential
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Update build-plg.sh and rebuild the plg
+        env:
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
         run: |
           set -euo pipefail
-          LATEST_VERSION="${{ needs.check-version.outputs.latest-version }}"
           LATEST_NO_V="${LATEST_VERSION#v}"
           TODAY=$(date +%Y.%m.%d)
 
@@ -116,12 +127,13 @@ jobs:
           ./build-plg.sh
 
       - name: Validate updated plugin
+        env:
+          DOWNLOAD_URL: ${{ needs.check-version.outputs.download-url }}
         run: |
           sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libxml2-utils >/dev/null
           xmllint --noout nvidia_gpu_exporter.plg
           echo "XML validation passed"
 
-          DOWNLOAD_URL="${{ needs.check-version.outputs.download-url }}"
           if curl -I -L --fail "$DOWNLOAD_URL" >/dev/null 2>&1; then
             echo "Download URL validation passed"
           else
@@ -132,10 +144,9 @@ jobs:
       - name: Create Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_VERSION: ${{ needs.check-version.outputs.current-version }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
         run: |
-          CURRENT_VERSION="${{ needs.check-version.outputs.current-version }}"
-          LATEST_VERSION="${{ needs.check-version.outputs.latest-version }}"
-
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
@@ -184,12 +195,17 @@ jobs:
 
     steps:
       - name: Notify workflow result
+        env:
+          CURRENT_VERSION: ${{ needs.check-version.outputs.current-version }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
+          UPDATE_NEEDED: ${{ needs.check-version.outputs.update-needed }}
+          UPDATE_RESULT: ${{ needs.update-plugin.result }}
+          EVENT: ${{ github.event_name }}
         run: |
-          CURRENT_VERSION="${{ needs.check-version.outputs.current-version }}"
-          LATEST_VERSION="${{ needs.check-version.outputs.latest-version }}"
-          UPDATE_NEEDED="${{ needs.check-version.outputs.update-needed }}"
-          if [ "$UPDATE_NEEDED" == "true" ]; then
-            if [ "${{ needs.update-plugin.result }}" == "success" ]; then
+          if [ "$UPDATE_NEEDED" == "true" ] && [ "$EVENT" == "pull_request" ]; then
+            echo "Update from $CURRENT_VERSION to $LATEST_VERSION available; not applied from a pull request."
+          elif [ "$UPDATE_NEEDED" == "true" ]; then
+            if [ "$UPDATE_RESULT" == "success" ]; then
               echo "Updated from $CURRENT_VERSION to $LATEST_VERSION"
             else
               echo "Failed to update from $CURRENT_VERSION to $LATEST_VERSION"
