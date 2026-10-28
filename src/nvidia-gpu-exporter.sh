@@ -14,8 +14,48 @@ LOG_LEVEL="info"
 NVIDIA_SMI_CMD="nvidia-smi"
 QUERY_FIELDS="AUTO"
 TELEMETRY_PATH="/metrics"
-# shellcheck source=/dev/null
-[ -f "$CFG_FILE" ] && . "$CFG_FILE"
+
+# Read the cfg as data, never as code: dynamix update.php writes the page's
+# free-text fields into it unescaped, so sourcing it would run whatever a value
+# contains, as root. Only the six known keys are taken, each as the literal text
+# after "=" with one pair of surrounding double quotes removed.
+read_config() {
+    local line key value
+    [ -f "$CFG_FILE" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        key="${line%%=*}"
+        [ "$key" = "$line" ] && continue
+        value="${line#*=}"
+        if [ "${#value}" -ge 2 ] && [ "${value:0:1}" = '"' ] && [ "${value: -1}" = '"' ]; then
+            value="${value:1:${#value}-2}"
+        fi
+        case "$key" in
+            LISTEN_PORT|AUTOSTART|LOG_LEVEL|NVIDIA_SMI_CMD|QUERY_FIELDS|TELEMETRY_PATH)
+                printf -v "$key" '%s' "$value"
+                ;;
+        esac
+    done < "$CFG_FILE"
+
+    if [[ "$LISTEN_PORT" =~ ^[0-9]{1,5}$ ]] && (( 10#$LISTEN_PORT >= 1 && 10#$LISTEN_PORT <= 65535 )); then
+        LISTEN_PORT=$((10#$LISTEN_PORT))
+    else
+        echo "WARNING: LISTEN_PORT in $CFG_FILE is not a port from 1 to 65535; using 9835" >&2
+        LISTEN_PORT="9835"
+    fi
+    case "$LOG_LEVEL" in
+        debug|info|warn|error) ;;
+        *)
+            echo "WARNING: LOG_LEVEL in $CFG_FILE is not debug, info, warn or error; using info" >&2
+            LOG_LEVEL="info"
+            ;;
+    esac
+    if [ "${TELEMETRY_PATH:0:1}" != "/" ]; then
+        echo "WARNING: TELEMETRY_PATH in $CFG_FILE does not start with /; using /metrics" >&2
+        TELEMETRY_PATH="/metrics"
+    fi
+}
+read_config
 
 running_pids() { pgrep -f "$BINARY_PATH" 2>/dev/null; }
 
@@ -91,6 +131,9 @@ status_service() {
     echo "NVIDIA GPU Exporter is not running"
     return 1
 }
+
+# Sourced (post-install.sh does) it only loads the config; run, it dispatches.
+[ "${BASH_SOURCE[0]}" != "$0" ] && return 0
 
 case "$1" in
     start)

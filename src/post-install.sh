@@ -1,14 +1,12 @@
-CFG_FILE="/boot/config/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.cfg"
 RC_SCRIPT="/usr/local/emhttp/plugins/nvidia-gpu-exporter/nvidia-gpu-exporter.sh"
 
 mkdir -p /usr/local/etc/rc.d
 ln -sf "$RC_SCRIPT" /usr/local/etc/rc.d/rc.nvidia-gpu-exporter
 
-LISTEN_PORT="9835"
-AUTOSTART="true"
-TELEMETRY_PATH="/metrics"
+# Sourced, the control script only reads and checks the cfg, so this sees the
+# same AUTOSTART, LISTEN_PORT and TELEMETRY_PATH the service starts with.
 # shellcheck source=/dev/null
-[ -f "$CFG_FILE" ] && . "$CFG_FILE"
+. "$RC_SCRIPT"
 
 # Restart when auto-start is on or the service is already up, so an upgrade
 # swaps in the new binary; otherwise leave it stopped.

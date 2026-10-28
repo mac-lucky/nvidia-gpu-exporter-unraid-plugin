@@ -20,6 +20,7 @@ function nv_yesno($cfg, $key, $default) {
 }
 function nv_select($cfg, $key, $default, $options) {
     $cur = $cfg[$key] ?? $default;
+    if (!in_array($cur, $options, true)) $cur = $default;
     $out = '';
     foreach ($options as $o) {
         $sel = $o === $cur ? ' selected' : '';
@@ -31,8 +32,11 @@ function nv_select($cfg, $key, $default, $options) {
 
 $binary = "/usr/local/bin/nvidia-gpu-exporter";
 $rc     = "/usr/local/emhttp/plugins/{$plugin}/{$plugin}.sh";
-$port   = (int) ($cfg['LISTEN_PORT'] ?? 9835);
-$mpath  = $cfg['TELEMETRY_PATH'] ?? '/metrics';
+// Same fallbacks as the control script, so the page shows what the service uses.
+$port   = (string) ($cfg['LISTEN_PORT'] ?? '');
+$port   = preg_match('/^[0-9]{1,5}$/', $port) && (int) $port >= 1 && (int) $port <= 65535 ? (int) $port : 9835;
+$mpath  = (string) ($cfg['TELEMETRY_PATH'] ?? '');
+if ($mpath === '' || $mpath[0] !== '/') $mpath = '/metrics';
 
 // Service state. The [r] bracket keeps pgrep from matching this exec's own
 // sh -c wrapper, whose argv contains the pattern.
