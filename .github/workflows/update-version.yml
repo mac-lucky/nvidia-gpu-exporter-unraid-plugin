@@ -86,10 +86,12 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # gh workflow run: dispatch the required validate check on the update branch
+      actions: write
 
     steps:
       - name: Checkout repository
-        # zizmor: ignore[artipacked] the Create Pull Request step pushes the update branch with this credential
+        # zizmor: ignore[artipacked] the Push step below pushes the update branch with this credential
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Update build-plg.sh and rebuild the plg
@@ -152,7 +154,7 @@ jobs:
             exit 1
           fi
 
-      - name: Create Pull Request
+      - name: Push the update branch and open a pull request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURRENT_VERSION: ${{ needs.check-version.outputs.current-version }}
@@ -167,7 +169,14 @@ jobs:
           git add build-plg.sh nvidia_gpu_exporter.plg
           git commit -m "chore: update nvidia-gpu-exporter from $CURRENT_VERSION to $LATEST_VERSION"
 
-          git push origin "$BRANCH_NAME"
+          # --force and the PR lookup let a re-run of a failed update reuse the
+          # branch and the pull request the earlier attempt left behind.
+          git push --force origin "$BRANCH_NAME"
+
+          if [ -n "$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')" ]; then
+            echo "A pull request for $BRANCH_NAME is already open"
+            exit 0
+          fi
 
           PR_BODY="Updates the bundled nvidia-gpu-exporter from $CURRENT_VERSION to $LATEST_VERSION.
 
@@ -181,17 +190,46 @@ jobs:
             --head "$BRANCH_NAME" \
             --base main
 
+      # main requires the validate check, but a pull request opened with
+      # GITHUB_TOKEN starts no workflow. workflow_dispatch is the one event this
+      # token may start, so run validate-plg.yml on the branch by hand and wait.
+      - name: Run the validate check on the update branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
+        run: |
+          BRANCH_NAME="update-nvidia-gpu-exporter-${LATEST_VERSION}"
+          HEAD_SHA=$(git rev-parse HEAD)
+          gh workflow run validate-plg.yml --ref "$BRANCH_NAME"
+
+          # The dispatched run takes a few seconds to show up. Match it by the
+          # pushed commit so a run from an earlier attempt is never picked.
+          RUN_ID=""
+          for _ in $(seq 1 24); do
+            sleep 5
+            RUN_ID=$(gh run list --workflow validate-plg.yml --branch "$BRANCH_NAME" --event workflow_dispatch \
+              --json databaseId,headSha --jq "map(select(.headSha == \"$HEAD_SHA\")) | .[0].databaseId // empty")
+            [ -n "$RUN_ID" ] && break
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "ERROR: no validate-plg.yml run for $HEAD_SHA appeared within 2 minutes"
+            exit 1
+          fi
+
+          echo "Watching validate-plg.yml run $RUN_ID"
+          gh run watch "$RUN_ID" --exit-status
+
       - name: Merge pull request and delete branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LATEST_VERSION: ${{ needs.check-version.outputs.latest-version }}
         run: |
           BRANCH_NAME="update-nvidia-gpu-exporter-${LATEST_VERSION}"
-          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number')
+          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
 
           if [ -n "$PR_NUMBER" ]; then
-            # Squash-merge directly and delete the branch. The repo has auto-merge
-            # disabled and no required PR checks, so a direct merge is reliable.
+            # Squash-merge directly rather than with --auto: the repo has
+            # auto-merge disabled. The required validate check passed above.
             gh pr merge "$PR_NUMBER" --squash --delete-branch
             echo "Merged PR #$PR_NUMBER and deleted branch"
           else
