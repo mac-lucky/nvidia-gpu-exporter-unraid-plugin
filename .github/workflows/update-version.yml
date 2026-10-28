@@ -50,28 +50,30 @@ jobs:
           # build-plg.sh is the single source of truth for the exporter version
           CURRENT_VERSION="v$(grep -oE '^EXPORTER_VERSION="[0-9.]+"' build-plg.sh | cut -d'"' -f2)"
           echo "Current version: $CURRENT_VERSION"
-          echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "current-version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
 
           LATEST_RELEASE=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/utkuozdemir/nvidia_gpu_exporter/releases/latest)
           LATEST_VERSION=$(echo "$LATEST_RELEASE" | jq -r '.tag_name')
-          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" == "null" ]; then
-            echo "ERROR: could not determine latest version (tag_name was empty or null)"
+          # The tag goes into sed expressions, a git branch name and build-plg.sh,
+          # so take nothing but a plain vX.Y.Z.
+          if ! [[ "$LATEST_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: upstream tag_name is not vX.Y.Z (got: $LATEST_VERSION)"
             echo "$LATEST_RELEASE"
             exit 1
           fi
           echo "Latest version: $LATEST_VERSION"
-          echo "latest-version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "latest-version=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
 
           DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | jq -r '.assets[] | select(.name | test("^nvidia_gpu_exporter_[0-9][0-9.]*_linux_x86_64\\.tar\\.gz$")) | .browser_download_url')
           echo "Download URL: $DOWNLOAD_URL"
-          echo "download-url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          echo "download-url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
 
           if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ] || [ "$FORCE_UPDATE" == "true" ]; then
             echo "Update needed: true"
-            echo "update-needed=true" >> $GITHUB_OUTPUT
+            echo "update-needed=true" >> "$GITHUB_OUTPUT"
           else
             echo "Update needed: false"
-            echo "update-needed=false" >> $GITHUB_OUTPUT
+            echo "update-needed=false" >> "$GITHUB_OUTPUT"
           fi
 
   # Never on a pull request: this job pushes a branch cut from the checked-out
@@ -133,6 +135,15 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libxml2-utils >/dev/null
           xmllint --noout nvidia_gpu_exporter.plg
           echo "XML validation passed"
+
+          # build-plg.sh derives the URL the plg downloads from EXPORTER_VERSION;
+          # it must be the asset the release actually publishes.
+          PLG_URL=$(grep -oE '^DOWNLOAD_URL="[^"]+"' nvidia_gpu_exporter.plg | cut -d'"' -f2)
+          if [ "$PLG_URL" != "$DOWNLOAD_URL" ]; then
+            echo "ERROR: the plg downloads '$PLG_URL' but the release asset is '$DOWNLOAD_URL'"
+            exit 1
+          fi
+          echo "Download URL matches the release asset"
 
           if curl -I -L --fail "$DOWNLOAD_URL" >/dev/null 2>&1; then
             echo "Download URL validation passed"
