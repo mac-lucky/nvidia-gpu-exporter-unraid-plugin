@@ -88,6 +88,8 @@ jobs:
       pull-requests: write
       # gh workflow run: dispatch the required validate check on the update branch
       actions: write
+      # report that run's result as the validate status of the update commit
+      statuses: write
 
     steps:
       - name: Checkout repository
@@ -193,6 +195,9 @@ jobs:
       # main requires the validate check, but a pull request opened with
       # GITHUB_TOKEN starts no workflow. workflow_dispatch is the one event this
       # token may start, so run validate-plg.yml on the branch by hand and wait.
+      # A dispatched run's check is not linked to the pull request, so its
+      # result is posted as the commit's validate status, which branch
+      # protection reads by commit.
       - name: Run the validate check on the update branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -218,6 +223,12 @@ jobs:
 
           echo "Watching validate-plg.yml run $RUN_ID"
           gh run watch "$RUN_ID" --exit-status
+
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=success -f context=validate \
+            -f description="validate-plg.yml passed on this commit" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" >/dev/null
+          echo "Posted the validate status for $HEAD_SHA"
 
       - name: Merge pull request and delete branch
         env:
