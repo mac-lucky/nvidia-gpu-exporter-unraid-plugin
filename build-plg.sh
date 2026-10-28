@@ -7,7 +7,7 @@ OUT="${1:-$(dirname "$0")/nvidia_gpu_exporter.plg}"
 
 # Single source of truth for versions. The auto-update workflow rewrites the
 # three lines below and re-runs this script; nothing under src/ carries a version.
-VERSION="2026.10.28"
+VERSION="2026.10.28a"
 EXPORTER_VERSION="1.16.0"
 EXPORTER_SHA256="cbb01772167bc17dfb5f2c8b8275df4aa266dc5bd8e612eae59d8ea441d543c3"
 DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v${EXPORTER_VERSION}/nvidia_gpu_exporter_${EXPORTER_VERSION}_linux_x86_64.tar.gz"
@@ -86,6 +86,9 @@ cat <<XMLHEAD
         min="6.9">
 
 <CHANGES>
+###2026.10.28a
+- Updated to nvidia-gpu-exporter v1.16.0
+- Auto-updated via GitHub Actions
 ###2026.10.28
 - Read the settings file as plain values instead of running it as a shell script, so text typed into a setting can never run as a command
 - An invalid listen port, log level or telemetry path falls back to its default (with a warning) instead of breaking the service
