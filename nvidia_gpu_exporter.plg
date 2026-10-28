@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2026.10.26">
+<!ENTITY version   "2026.10.28">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
 <!ENTITY supportURL "&gitURL;/issues">
@@ -20,6 +20,13 @@
         min="6.9">
 
 <CHANGES>
+###2026.10.28
+- Read the settings file as plain values instead of running it as a shell script, so text typed into a setting can never run as a command
+- An invalid listen port, log level or telemetry path falls back to its default (with a warning) instead of breaking the service
+- Pressing Apply no longer saves a stray apply entry into the settings file, and the update removes the one earlier versions left there
+- Keep the service log from filling RAM: on start, a log over 1 MiB is cut to its last 1000 lines
+- Stop waits for the exporter to exit after a forced kill instead of reporting a failure too early
+- The install cleans up its temporary files even when it fails
 ###2026.10.26
 - Updated to nvidia-gpu-exporter v1.16.0
 - Auto-updated via GitHub Actions
