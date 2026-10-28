@@ -197,7 +197,7 @@ Telemetry path:
 : <input type="text" name="TELEMETRY_PATH" maxlength="100" value="<?= nv_val($cfg,'TELEMETRY_PATH','/metrics') ?>">
 
 &nbsp;
-: <input type="submit" name="apply" value="Apply"> <input type="button" value="Done" onclick="done()">
+: <input type="submit" name="#apply" value="Apply"> <input type="button" value="Done" onclick="done()">
 
 </form>
 

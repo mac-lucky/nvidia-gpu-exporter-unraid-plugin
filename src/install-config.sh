@@ -14,5 +14,7 @@ ensure LOG_LEVEL '"info"'
 ensure NVIDIA_SMI_CMD '"nvidia-smi"'
 ensure QUERY_FIELDS '"AUTO"'
 ensure TELEMETRY_PATH '"/metrics"'
+# Earlier releases saved the page's Apply button into the cfg as apply="Apply".
+sed -i '/^apply=/d' "$CFG_FILE"
 chmod 644 "$CFG_FILE"
 echo "Config ready at $CFG_FILE"
