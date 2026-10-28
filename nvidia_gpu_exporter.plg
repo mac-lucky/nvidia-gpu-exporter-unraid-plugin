@@ -122,7 +122,6 @@ echo "Installing NVIDIA GPU Exporter v${EXPORTER_VERSION}..."
 CACHE_DIR="/boot/config/plugins/nvidia-gpu-exporter"
 TARBALL="$CACHE_DIR/nvidia_gpu_exporter_${EXPORTER_VERSION}_linux_x86_64.tar.gz"
 BINARY_PATH="/usr/local/bin/nvidia-gpu-exporter"
-TEMP_DIR="/tmp/nvidia-gpu-exporter-install"
 LOG_FILE="/var/log/nvidia-gpu-exporter.log"
 
 mkdir -p "$CACHE_DIR"
@@ -158,8 +157,9 @@ fi
 find "$CACHE_DIR" -maxdepth 1 -name 'nvidia_gpu_exporter_*_linux_x86_64.tar.gz' \
     ! -name "$(basename "$TARBALL")" -delete
 
-rm -rf "$TEMP_DIR"
-mkdir -p "$TEMP_DIR"
+TEMP_DIR=$(mktemp -d /tmp/nvidia-gpu-exporter-install.XXXXXX)
+# Removed on every exit, including the set -e and explicit error exits below.
+trap 'rm -rf "$TEMP_DIR"' EXIT
 tar -xzf "$TARBALL" -C "$TEMP_DIR"
 
 # The tarball ships the binary as nvidia_gpu_exporter (underscore); it is
@@ -173,7 +173,6 @@ fi
 # Unlink first: overwriting a running binary in place fails with "text file busy".
 rm -f "$BINARY_PATH"
 install -m 0755 "$BINARY_FILE" "$BINARY_PATH"
-rm -rf "$TEMP_DIR"
 
 touch "$LOG_FILE"
 chmod 644 "$LOG_FILE"
