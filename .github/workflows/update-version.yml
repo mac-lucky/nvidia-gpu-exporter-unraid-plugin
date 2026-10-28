@@ -228,8 +228,8 @@ jobs:
           PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
 
           if [ -n "$PR_NUMBER" ]; then
-            # Squash-merge directly rather than with --auto: the repo has
-            # auto-merge disabled. The required validate check passed above.
+            # The required validate check passed in the step above, so merge
+            # now rather than with --auto.
             gh pr merge "$PR_NUMBER" --squash --delete-branch
             echo "Merged PR #$PR_NUMBER and deleted branch"
           else
