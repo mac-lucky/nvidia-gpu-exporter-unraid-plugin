@@ -250,6 +250,27 @@ read_config
 
 running_pids() { pgrep -f "$BINARY_PATH" 2>/dev/null; }
 
+# Wait up to $1 tenths of a second for the exporter to exit.
+wait_stopped() {
+    for _ in $(seq 1 "$1"); do
+        [ -z "$(running_pids)" ] && return 0
+        sleep 0.1
+    done
+    [ -z "$(running_pids)" ]
+}
+
+# /var/log lives in RAM: on start, cut a log past 1 MiB down to its last 1000
+# lines so it cannot grow without bound. The copy goes through /tmp because a
+# full /var/log has no room for a temp file next to the log.
+trim_log() {
+    local tmp
+    [ -f "$LOG_FILE" ] || return 0
+    [ "$(wc -c < "$LOG_FILE")" -gt 1048576 ] || return 0
+    tmp=$(mktemp) || return 0
+    tail -n 1000 "$LOG_FILE" > "$tmp" && cat "$tmp" > "$LOG_FILE"
+    rm -f "$tmp"
+}
+
 build_args() {
     ARGS=(
         "--web.listen-address=:${LISTEN_PORT}"
@@ -274,6 +295,7 @@ start_service() {
         return 0
     fi
     build_args
+    trim_log
     echo "$(date): starting nvidia-gpu-exporter on port ${LISTEN_PORT}" >> "$LOG_FILE"
     nohup "$BINARY_PATH" "${ARGS[@]}" >> "$LOG_FILE" 2>&1 &
     sleep 2
@@ -294,11 +316,11 @@ stop_service() {
     fi
     echo "Stopping NVIDIA GPU Exporter..."
     pkill -TERM -f "$BINARY_PATH" 2>/dev/null
-    for _ in $(seq 1 30); do
-        [ -z "$(running_pids)" ] && break
-        sleep 0.1
-    done
-    pkill -KILL -f "$BINARY_PATH" 2>/dev/null
+    if ! wait_stopped 30; then
+        # SIGKILL is not instant either: the process lingers until it is reaped.
+        pkill -KILL -f "$BINARY_PATH" 2>/dev/null
+        wait_stopped 10
+    fi
     if [ -z "$(running_pids)" ]; then
         echo "$(date): stopped nvidia-gpu-exporter" >> "$LOG_FILE"
         echo "NVIDIA GPU Exporter stopped"
@@ -362,7 +384,7 @@ case "$1" in
 esac
 ]]>
 </INLINE>
-<MD5>9c1328a50d3b022a3623fc4690105dfd</MD5>
+<MD5>e43e188cdeb70eecb766fde87ebb7300</MD5>
 </FILE>
 
 <!-- 4. Settings page (Settings -> User Utilities -> NVIDIA GPU Exporter). -->
