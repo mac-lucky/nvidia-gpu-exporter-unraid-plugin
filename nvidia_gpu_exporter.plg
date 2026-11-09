@@ -3,7 +3,7 @@
 <!DOCTYPE PLUGIN [
 <!ENTITY name      "nvidia-gpu-exporter">
 <!ENTITY author    "mac-lucky">
-<!ENTITY version   "2026.11.02">
+<!ENTITY version   "2026.11.09">
 <!ENTITY gitURL    "https://github.com/mac-lucky/nvidia-gpu-exporter-unraid-plugin">
 <!ENTITY pluginURL "&gitURL;/raw/main/nvidia_gpu_exporter.plg">
 <!ENTITY supportURL "&gitURL;/issues">
@@ -20,6 +20,9 @@
         min="6.9">
 
 <CHANGES>
+###2026.11.09
+- Updated to nvidia-gpu-exporter v1.18.0
+- Auto-updated via GitHub Actions
 ###2026.11.02
 - Updated to nvidia-gpu-exporter v1.17.0
 - Auto-updated via GitHub Actions
@@ -123,9 +126,9 @@ echo "Config ready at $CFG_FILE"
 <FILE Run="/bin/bash">
 <INLINE>
 <![CDATA[
-EXPORTER_VERSION="1.17.0"
-EXPORTER_SHA256="c0d0843e3c3659d6613373353f6552c041226f3627eab0e4892e45dfb03a6e02"
-DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.17.0/nvidia_gpu_exporter_1.17.0_linux_x86_64.tar.gz"
+EXPORTER_VERSION="1.18.0"
+EXPORTER_SHA256="796ec4f43f43b7c67f43ab347efd5f2251a730440489feaefd948d42982d500a"
+DOWNLOAD_URL="https://github.com/utkuozdemir/nvidia_gpu_exporter/releases/download/v1.18.0/nvidia_gpu_exporter_1.18.0_linux_x86_64.tar.gz"
 # EXPORTER_VERSION, EXPORTER_SHA256 and DOWNLOAD_URL are prepended to this
 # script by build-plg.sh when the plg is assembled.
 # shellcheck disable=SC2154
